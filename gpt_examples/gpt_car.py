@@ -38,7 +38,8 @@ else:
 # =================================================================
 openai_helper = OpenAiHelper(OPENAI_API_KEY, OPENAI_ASSISTANT_ID, 'picarx')
 
-LANGUAGE = []
+LANGUAGE = 'ca'  # Catalan language code for STT
+# LANGUAGE = []  # Empty means auto-detect all languages
 # LANGUAGE = ['zh', 'en'] # config stt language code, https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
 
 # VOLUME_DB = 5
