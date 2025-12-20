@@ -59,7 +59,7 @@ Fill your ASSISTANT_ID into the `keys.py` file.
     Answer Elaboration: Moderately detailed
 
     ## Actions you can do:
-    ["shake head", "nod", "wave hands", "resist", "act cute", "rub hands", "think", "twist body", "celebrate, "depressed"]
+    ["shake head", "nod", "wave hands", "resist", "act cute", "rub hands", "think", "twist body", "celebrate", "depressed", "advance", "avanci"]
     ## Sound effects:
     ["honking", "start engine"]
 ```
