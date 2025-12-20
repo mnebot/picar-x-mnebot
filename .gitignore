@@ -1,3 +1,14 @@
 .vscode/*
 build/*
 bk/
+# Cache de Python
+gpt_examples/__pycache__/
+
+# Imatges temporals d'entrada
+gpt_examples/img_imput.jpg
+
+# Fitxers d'OpenAI
+gpt_examples/keys.py.save*
+
+# Carpeta de fitxers de veu generats (TTS)
+gpt_examples/tts/
