@@ -7,8 +7,11 @@ gpt_examples/__pycache__/
 # Imatges temporals d'entrada
 gpt_examples/img_imput.jpg
 
-# Fitxers d'OpenAI
+# Fitxers de seguretat de l'editor nano
 gpt_examples/keys.py.save*
 
 # Carpeta de fitxers de veu generats (TTS)
 gpt_examples/tts/
+
+# Fitxers de configuració OpenAI
+gpt_examples/keys.py
