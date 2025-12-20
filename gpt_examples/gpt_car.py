@@ -17,6 +17,8 @@ import random
 import os
 import sys
 
+os.environ['SDL_AUDIODRIVER'] = 'pulse' # PipeWire a Bookworm emula PulseAudio - necessary per a que raspberry pi 4 to work with sound
+
 os.popen("pinctrl set 20 op dh") # enable robot_hat speake switch
 current_path = os.path.dirname(os.path.abspath(__file__))
 os.chdir(current_path) # change working directory
@@ -38,7 +40,8 @@ else:
 # =================================================================
 openai_helper = OpenAiHelper(OPENAI_API_KEY, OPENAI_ASSISTANT_ID, 'picarx')
 
-LANGUAGE = []
+LANGUAGE = 'ca'  # Catalan language code for STT
+# LANGUAGE = []  # Empty means auto-detect all languages
 # LANGUAGE = ['zh', 'en'] # config stt language code, https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
 
 # VOLUME_DB = 5

@@ -74,7 +74,7 @@ class OpenAiHelper():
                 model="whisper-1", 
                 file=wav_data,
                 language=language,
-                prompt="this is the conversation between me and a robot"
+                prompt="aquesta és una conversa entre jo i un robot"
             )
 
             # file = "./stt_output.wav"
@@ -119,10 +119,12 @@ class OpenAiHelper():
 
     def dialogue(self, msg):
         chat_print("user", msg)
+        # Prepend language instruction to ensure Catalan responses
+        msg_with_lang = f"Respon sempre en català. {msg}"
         message = self.client.beta.threads.messages.create(
             thread_id=self.thread.id,
             role="user",
-            content=msg
+            content=msg_with_lang
             )
         run = self.client.beta.threads.runs.create_and_poll(
             thread_id=self.thread.id,
@@ -157,13 +159,16 @@ class OpenAiHelper():
                     purpose="vision"
                 )
 
+        # Prepend language instruction to ensure Catalan responses
+        msg_with_lang = f"Respon sempre en català. {msg}"
+
         message =  self.client.beta.threads.messages.create(
             thread_id= self.thread.id,
             role="user",
             content= [
                 {
                     "type": "text",
-                    "text": msg
+                    "text": msg_with_lang
                 },
                 # {
                 # "type": "image_url",
