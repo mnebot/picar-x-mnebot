@@ -286,7 +286,12 @@ def follow_me_handler():
                 follow_me_handler._debug_printed = True
             
             # Comprovar si hi ha una persona detectada
-            human_n = Vilib.detect_obj_parameter.get('human_n', 0)
+            try:
+                human_n = Vilib.detect_obj_parameter.get('human_n', 0)
+            except Exception as e:
+                print(f"[Follow Me] Error accedint a detect_obj_parameter: {e}")
+                human_n = 0
+            
             if human_n != 0:
                 # Obtenir posició de la persona
                 person_x = Vilib.detect_obj_parameter['human_x']
@@ -350,10 +355,16 @@ def follow_me_handler():
                         follow_me_handler._last_move_debug = time.time()
             else:
                 # No hi ha persona detectada - aturar
+                # Debug ocasional
+                if not hasattr(follow_me_handler, '_last_no_person_time') or time.time() - follow_me_handler._last_no_person_time > 3:
+                    print("[Follow Me] No es detecta cap persona - aturat")
+                    follow_me_handler._last_no_person_time = time.time()
                 my_car.stop()
             
         except Exception as e:
-            print(f'Error en follow me: {e}')
+            import traceback
+            print(f'[Follow Me] Error: {e}')
+            print(f'[Follow Me] Traceback: {traceback.format_exc()}')
             my_car.stop()
         
         time.sleep(0.05)  # Petit delay per controlar la freqüència del loop
