@@ -245,9 +245,9 @@ def start_follow_me(car):
         if hasattr(main_module, 'follow_me_active') and hasattr(main_module, 'follow_me_lock'):
             with main_module.follow_me_lock:
                 main_module.follow_me_active = True
-            print("Follow me activat")
+            print(f"Follow me activat! follow_me_active = {main_module.follow_me_active}")
         else:
-            print("Error: No es pot accedir a follow_me_active (el mòdul no està inicialitzat?)")
+            print(f"Error: No es pot accedir a follow_me_active. Atributs disponibles: {[attr for attr in dir(main_module) if 'follow' in attr.lower()]}")
     except Exception as e:
         print(f"Error activant follow me: {e}")
 

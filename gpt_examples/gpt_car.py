@@ -344,6 +344,11 @@ def follow_me_handler():
                 time.sleep(0.1)
                 continue
             
+            # Debug: mostrar que el seguiment està actiu (només un cop)
+            if not hasattr(follow_me_handler, '_debug_printed'):
+                print("Follow me handler actiu i funcionant...")
+                follow_me_handler._debug_printed = True
+            
             # Comprovar si hi ha una persona detectada
             if Vilib.detect_obj_parameter['human_n'] != 0:
                 # Obtenir posició de la persona
@@ -422,8 +427,11 @@ def main():
 
     while True:
         if input_mode == 'voice':
-            my_car.set_cam_pan_angle(DEFAULT_HEAD_PAN)
-            my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
+            # No moure la càmera si el seguiment està actiu
+            with follow_me_lock:
+                if not follow_me_active:
+                    my_car.set_cam_pan_angle(DEFAULT_HEAD_PAN)
+                    my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
 
             # listen
             # ----------------------------------------------------------------
@@ -451,7 +459,10 @@ def main():
                 continue
 
         elif input_mode == 'keyboard':
-            my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
+            # No moure la càmera si el seguiment està actiu
+            with follow_me_lock:
+                if not follow_me_active:
+                    my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
 
             with action_lock:
                 action_status = 'standby'
