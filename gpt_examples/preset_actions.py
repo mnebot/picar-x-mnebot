@@ -226,6 +226,14 @@ def start_engine(music):
     # utils.speak_block(music, "../sounds/car-start-engine.wav", 100)
     music.sound_play_threading("../sounds/car-start-engine.wav", 50)
 
+def advance_20cm(car):
+    """Avança el cotxe aproximadament 20 cm endavant"""
+    car.reset()
+    car.set_dir_servo_angle(0)  # Assegurar que va recte
+    car.forward(30)  # Velocitat moderada
+    sleep(0.8)  # Temps per avançar aproximadament 20 cm
+    car.stop()
+
 
 actions_dict = {
     "shake head":shake_head, 
@@ -238,6 +246,9 @@ actions_dict = {
     "twist body": twist_body,
     "celebrate": celebrate,
     "depressed": depressed,
+    "advance": advance_20cm,
+    "avanci": advance_20cm,
+    "forward 20cm": advance_20cm,
 }
 
 sounds_dict = {
