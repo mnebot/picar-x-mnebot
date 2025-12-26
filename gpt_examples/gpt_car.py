@@ -13,6 +13,7 @@ from robot_hat import Music, Pin
 import time
 import threading
 import random
+import tempfile
 
 import os
 import sys
@@ -22,6 +23,10 @@ os.environ['SDL_AUDIODRIVER'] = 'pulse' # PipeWire a Bookworm emula PulseAudio -
 os.popen("pinctrl set 20 op dh") # enable robot_hat speake switch
 current_path = os.path.dirname(os.path.abspath(__file__))
 os.chdir(current_path) # change working directory
+
+# Ensure required directories exist with proper permissions
+tts_dir = os.path.join(current_path, 'tts')
+os.makedirs(tts_dir, mode=0o755, exist_ok=True)
 
 input_mode = None
 with_img = True
@@ -81,6 +86,7 @@ if with_img:
     Vilib.camera_start(vflip=False,hflip=False)
     Vilib.show_fps()
     Vilib.display(local=False,web=True)
+    Vilib.face_detect_switch(True)  # Activar detecció de persones
 
     while True:
         if Vilib.flask_start:
@@ -221,19 +227,85 @@ action_thread = threading.Thread(target=action_handler)
 action_thread.daemon = True
 
 
+# person detection thread - detecta persones i diu "Hola"
+# =================================================================
+person_detected = False
+person_detection_lock = threading.Lock()
+GREETING_COOLDOWN = 5.0  # segons d'espera abans de tornar a saludar la mateixa persona
+last_greeting_time = 0
+
+def person_detection_handler():
+    """Fil que detecta persones i fa que el robot digui 'Hola'"""
+    global person_detected, last_greeting_time, speech_loaded, tts_file, tts_dir
+    
+    if not with_img:
+        return
+    
+    # Esperar una mica per assegurar que Vilib està completament inicialitzat
+    time.sleep(1.0)
+    
+    while True:
+        try:
+            # Comprovar si hi ha una persona detectada
+            if Vilib.detect_obj_parameter['human_n'] != 0:
+                # Persona detectada
+                with person_detection_lock:
+                    current_time = time.time()
+                    # Només saludar si no hem saludat recentment
+                    if not person_detected or (current_time - last_greeting_time) > GREETING_COOLDOWN:
+                        person_detected = True
+                        last_greeting_time = current_time
+                        
+                        # Generar TTS per dir "Hola"
+                        gray_print("Persona detectada! Dient 'Hola'...")
+                        try:
+                            _time = time.strftime("%y-%m-%d_%H-%M-%S", time.localtime())
+                            _tts_f = os.path.join(tts_dir, f"greeting_{_time}_raw.wav")
+                            _tts_status = openai_helper.text_to_speech(
+                                "Hola", 
+                                _tts_f, 
+                                TTS_VOICE, 
+                                response_format='wav', 
+                                instructions=VOICE_INSTRUCTIONS
+                            )
+                            if _tts_status:
+                                tts_file = os.path.join(tts_dir, f"greeting_{_time}_{VOLUME_DB}dB.wav")
+                                _tts_status = sox_volume(_tts_f, tts_file, VOLUME_DB)
+                                if _tts_status:
+                                    # Activar la reproducció del so
+                                    with speech_lock:
+                                        speech_loaded = True
+                        except Exception as e:
+                            print(f'Error en TTS de salutació: {e}')
+            else:
+                # No hi ha persona detectada
+                with person_detection_lock:
+                    person_detected = False
+                    
+        except Exception as e:
+            print(f'Error en detecció de persones: {e}')
+        
+        time.sleep(0.2)  # Comprovar cada 200ms
+
+person_detection_thread = threading.Thread(target=person_detection_handler)
+person_detection_thread.daemon = True
+
+
 # main
 # =================================================================
 def main():
     global current_feeling, last_feeling
     global speech_loaded
     global action_status, actions_to_be_done
-    global tts_file
+    global tts_file, tts_dir
 
     my_car.reset()
     my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
 
     speak_thread.start()
     action_thread.start()
+    if with_img:
+        person_detection_thread.start()  # Iniciar detecció de persones
 
     while True:
         if input_mode == 'voice':
@@ -290,8 +362,14 @@ def main():
             action_status = 'think'
 
         if with_img:
-            img_path = './img_imput.jpg'
-            cv2.imwrite(img_path, Vilib.img)
+            img_path = os.path.join(current_path, 'img_imput.jpg')
+            try:
+                cv2.imwrite(img_path, Vilib.img)
+            except Exception as e:
+                print(f'Warning: Could not write image file: {e}')
+                # Try alternative location
+                img_path = os.path.join(tempfile.gettempdir(), 'img_imput.jpg')
+                cv2.imwrite(img_path, Vilib.img)
             response = openai_helper.dialogue_with_img(_result, img_path)
         else:
             response = openai_helper.dialogue(_result)
@@ -336,10 +414,10 @@ def main():
             if answer != '':
                 st = time.time()
                 _time = time.strftime("%y-%m-%d_%H-%M-%S", time.localtime())
-                _tts_f = f"./tts/{_time}_raw.wav"
+                _tts_f = os.path.join(tts_dir, f"{_time}_raw.wav")
                 _tts_status = openai_helper.text_to_speech(answer, _tts_f, TTS_VOICE, response_format='wav', instructions=VOICE_INSTRUCTIONS) # alloy, echo, fable, onyx, nova, and shimmer
                 if _tts_status:
-                    tts_file = f"./tts/{_time}_{VOLUME_DB}dB.wav"
+                    tts_file = os.path.join(tts_dir, f"{_time}_{VOLUME_DB}dB.wav")
                     _tts_status = sox_volume(_tts_f, tts_file, VOLUME_DB)
                 gray_print(f'tts takes: {time.time() - st:.3f} s')
 
