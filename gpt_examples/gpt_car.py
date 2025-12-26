@@ -227,70 +227,6 @@ action_thread = threading.Thread(target=action_handler)
 action_thread.daemon = True
 
 
-# person detection thread - detecta persones i diu "Hola"
-# =================================================================
-person_detected = False
-person_detection_lock = threading.Lock()
-GREETING_COOLDOWN = 5.0  # segons d'espera abans de tornar a saludar la mateixa persona
-last_greeting_time = 0
-
-def person_detection_handler():
-    """Fil que detecta persones i fa que el robot digui 'Hola'"""
-    global person_detected, last_greeting_time, speech_loaded, tts_file, tts_dir
-    
-    if not with_img:
-        return
-    
-    # Esperar una mica per assegurar que Vilib està completament inicialitzat
-    time.sleep(1.0)
-    
-    while True:
-        try:
-            # Comprovar si hi ha una persona detectada
-            if Vilib.detect_obj_parameter['human_n'] != 0:
-                # Persona detectada
-                with person_detection_lock:
-                    current_time = time.time()
-                    # Només saludar si no hem saludat recentment
-                    if not person_detected or (current_time - last_greeting_time) > GREETING_COOLDOWN:
-                        person_detected = True
-                        last_greeting_time = current_time
-                        
-                        # Generar TTS per dir "Hola"
-                        gray_print("Persona detectada! Dient 'Hola'...")
-                        try:
-                            _time = time.strftime("%y-%m-%d_%H-%M-%S", time.localtime())
-                            _tts_f = os.path.join(tts_dir, f"greeting_{_time}_raw.wav")
-                            _tts_status = openai_helper.text_to_speech(
-                                "Hola", 
-                                _tts_f, 
-                                TTS_VOICE, 
-                                response_format='wav', 
-                                instructions=VOICE_INSTRUCTIONS
-                            )
-                            if _tts_status:
-                                tts_file = os.path.join(tts_dir, f"greeting_{_time}_{VOLUME_DB}dB.wav")
-                                _tts_status = sox_volume(_tts_f, tts_file, VOLUME_DB)
-                                if _tts_status:
-                                    # Activar la reproducció del so
-                                    with speech_lock:
-                                        speech_loaded = True
-                        except Exception as e:
-                            print(f'Error en TTS de salutació: {e}')
-            else:
-                # No hi ha persona detectada
-                with person_detection_lock:
-                    person_detected = False
-                    
-        except Exception as e:
-            print(f'Error en detecció de persones: {e}')
-        
-        time.sleep(0.2)  # Comprovar cada 200ms
-
-person_detection_thread = threading.Thread(target=person_detection_handler)
-person_detection_thread.daemon = True
-
-
 # follow me thread - segueix la persona detectada
 # =================================================================
 follow_me_active = False  # Desactivat per defecte - s'activa amb l'acció "follow me"
@@ -350,10 +286,16 @@ def follow_me_handler():
                 follow_me_handler._debug_printed = True
             
             # Comprovar si hi ha una persona detectada
-            if Vilib.detect_obj_parameter['human_n'] != 0:
+            human_n = Vilib.detect_obj_parameter.get('human_n', 0)
+            if human_n != 0:
                 # Obtenir posició de la persona
                 person_x = Vilib.detect_obj_parameter['human_x']
                 person_y = Vilib.detect_obj_parameter['human_y']
+                
+                # Debug: mostrar detecció (només ocasionalment per no saturar)
+                if not hasattr(follow_me_handler, '_last_debug_time') or time.time() - follow_me_handler._last_debug_time > 2:
+                    print(f"[Follow Me] Persona detectada: x={person_x:.0f}, y={person_y:.0f}")
+                    follow_me_handler._last_debug_time = time.time()
                 
                 # Calcular desplaçament respecte al centre
                 offset_x = person_x - CAMERA_CENTER_X
@@ -386,14 +328,26 @@ def follow_me_handler():
                 # Decidir moviment endavant/endarrere basat en distància
                 if distance < MIN_DISTANCE:
                     my_car.backward(BASE_SPEED)
+                    if not hasattr(follow_me_handler, '_last_move_debug') or time.time() - follow_me_handler._last_move_debug > 1:
+                        print(f"[Follow Me] Retrocedint - Distància: {distance:.1f}cm")
+                        follow_me_handler._last_move_debug = time.time()
                 elif distance < OPTIMAL_DISTANCE:
                     my_car.stop()
                 elif distance <= MAX_DISTANCE:
                     my_car.forward(BASE_SPEED)
+                    if not hasattr(follow_me_handler, '_last_move_debug') or time.time() - follow_me_handler._last_move_debug > 1:
+                        print(f"[Follow Me] Avançant - Distància: {distance:.1f}cm, Gir: {dir_angle:.0f}°")
+                        follow_me_handler._last_move_debug = time.time()
                 elif distance <= SAFE_DISTANCE:
                     my_car.forward(BASE_SPEED + 20)
+                    if not hasattr(follow_me_handler, '_last_move_debug') or time.time() - follow_me_handler._last_move_debug > 1:
+                        print(f"[Follow Me] Avançant ràpid - Distància: {distance:.1f}cm")
+                        follow_me_handler._last_move_debug = time.time()
                 else:
                     my_car.stop()
+                    if not hasattr(follow_me_handler, '_last_move_debug') or time.time() - follow_me_handler._last_move_debug > 2:
+                        print(f"[Follow Me] Distància massa gran: {distance:.1f}cm - aturat")
+                        follow_me_handler._last_move_debug = time.time()
             else:
                 # No hi ha persona detectada - aturar
                 my_car.stop()
@@ -422,7 +376,6 @@ def main():
     speak_thread.start()
     action_thread.start()
     if with_img:
-        person_detection_thread.start()  # Iniciar detecció de persones
         follow_me_thread.start()  # Iniciar fil de seguiment (desactivat per defecte)
 
     while True:
