@@ -1,0 +1,116 @@
+MILLORES I ALTERNATIVES FUTURES PER AL "FOLLOW ME"
+==================================================
+
+Aquest document recull possibles millores i alternatives per al sistema de seguiment "follow me" del picar-x.
+
+1. ESTIMACIÓ DE DISTÀNCIA BASADA EN MIDA DE LA PERSONA
+-------------------------------------------------------
+Actualment s'utilitza només el sensor ultrasònic per determinar distància.
+
+Millora:
+- Utilitzar les dimensions de la persona detectada (human_w, human_h) per estimar distància
+- Comparar amb el sensor ultrasònic per validació o com a backup
+- Ajustar la velocitat d'aproximació segons la mida aparent de la persona
+
+Implementació:
+- Calcular distància estimada: distance_estimate = (reference_person_size / current_person_size) * reference_distance
+- Combinar amb lectura ultrasònica: distance = weighted_average(ultrasonic, estimated)
+
+2. CONTROL PID PER MOVIMENTS MÉS SUAUS
+---------------------------------------
+Els moviments actuals poden ser una mica bruscos.
+
+Millora:
+- Implementar un controlador PID (Proportional-Integral-Derivative) per:
+  - Seguiment de posició horitzontal (gir)
+  - Seguiment de distància (endavant/endarrere)
+  - Seguiment de càmera (pan/tilt)
+
+Paràmetres a ajustar:
+- Kp (proporcional): resposta immediata a l'error
+- Ki (integral): correcció d'errors acumulats
+- Kd (derivatiu): previsió basada en la velocitat del canvi
+
+3. MODES DE SEGUIMENT DIFERENTS
+--------------------------------
+Oferir diferents comportaments segons el context.
+
+Modes propostos:
+- "follow_close": Seguir a distància propera (30-40cm) - per interaccions
+- "follow_normal": Seguir a distància mitjana (50-70cm) - per ús general
+- "follow_far": Seguir a distància llarga (80-120cm) - per espais grans
+- "follow_stop": Mantenir distància fixa i aturar-se si la persona s'atura
+
+Implementació:
+- Paràmetres configurables per cada mode
+- Canvi de mode mitjançant comanda de veu/text
+
+4. EVITACIÓ D'OBSTACLES INTEGRADA
+----------------------------------
+Quan segueix una persona, també hauria d'evitar obstacles.
+
+Millora:
+- Combinar seguiment de persona amb detecció d'obstacles
+- Si detecta obstacle, aturar o girar temporalment
+- Reprendre el seguiment un cop l'obstacle està clar
+
+Implementació:
+- Utilitzar sensor ultrasònic també per detectar obstacles laterals
+- Implementar lògica: obstacle > prioritat sobre seguiment temporalment
+
+5. SEGUIMENT MULTIPLE PERSONES
+-------------------------------
+Millora avançada: seguir la persona més propera o la que porta més temps visible.
+
+Implementació:
+- Vilib pot detectar múltiples persones (human_n > 1)
+- Seleccionar persona objectiu segons:
+  - Distància (més propera)
+  - Temps visible (més estable)
+  - Posició central a la imatge
+
+6. FILTRE DE KALMAN PER ESTIMACIÓ DE POSICIÓ
+---------------------------------------------
+Millorar la predicció de moviment de la persona.
+
+Millora:
+- Implementar filtre de Kalman per suavitzar les mesures
+- Predir posició futura basada en velocitat i direcció
+- Reduir efecte de deteccions errònies temporals
+
+7. ZONES DE TOLERÀNCIA ADAPTATIVES
+-----------------------------------
+Les zones de tolerància actuals són fixes.
+
+Millora:
+- Ajustar toleràncies segons la velocitat de moviment de la persona
+- Zones més petites quan la persona està quieta
+- Zones més grans quan la persona es mou ràpidament
+
+8. INTEGRACIÓ AMB EL SISTEMA D'ACCIONS DE GPT
+---------------------------------------------
+Permetre que l'assistent d'OpenAI controli el seguiment.
+
+Millores:
+- Afegir accions "start_follow_me" i "stop_follow_me" a preset_actions.py
+- Permetre ajust de paràmetres mitjançant comandes de veu
+- Integrar seguiment com a estat continu (no només acció puntual)
+
+9. FEEDBACK VISUAL/AUDITIU
+---------------------------
+Indicar a l'usuari que el seguiment està actiu.
+
+Millores:
+- Utilitzar LED per indicar estat (blink ràpid = seguint)
+- So de confirmació quan s'activa/desactiva seguiment
+- Moviment de la càmera subtil per indicar que està seguint
+
+10. CALIBRACIÓ DE DISTÀNCIA
+----------------------------
+Permetre calibrar distàncies òptimes per a cada entorn.
+
+Implementació:
+- Mode de calibració on l'usuari es posiciona a distàncies conegudes
+- Guardar valors de referència per persona i distància
+- Ajustar paràmetres automàticament segons entorn
+

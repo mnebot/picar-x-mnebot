@@ -234,6 +234,44 @@ def advance_20cm(car):
     sleep(0.8)  # Temps per avançar aproximadament 20 cm
     car.stop()
 
+def start_follow_me(car):
+    """Activa el seguiment automàtic de persones"""
+    try:
+        # Accedir a la variable global follow_me_active del mòdul gpt_car
+        # Quan s'executa com a script principal, el mòdul es troba a __main__
+        import sys
+        import __main__ as main_module
+        
+        if hasattr(main_module, 'follow_me_active') and hasattr(main_module, 'follow_me_lock'):
+            with main_module.follow_me_lock:
+                main_module.follow_me_active = True
+            print("Follow me activat")
+        else:
+            print("Error: No es pot accedir a follow_me_active (el mòdul no està inicialitzat?)")
+    except Exception as e:
+        print(f"Error activant follow me: {e}")
+
+def stop_follow_me(car):
+    """Desactiva el seguiment automàtic de persones i atura el robot"""
+    try:
+        # Accedir a la variable global follow_me_active del mòdul gpt_car
+        # Quan s'executa com a script principal, el mòdul es troba a __main__
+        import sys
+        import __main__ as main_module
+        
+        if hasattr(main_module, 'follow_me_active') and hasattr(main_module, 'follow_me_lock'):
+            with main_module.follow_me_lock:
+                main_module.follow_me_active = False
+            car.stop()  # Aturar el robot quan es desactiva el seguiment
+            car.set_dir_servo_angle(0)  # Centrar la direcció
+            print("Follow me desactivat")
+        else:
+            print("Error: No es pot accedir a follow_me_active (el mòdul no està inicialitzat?)")
+            car.stop()
+    except Exception as e:
+        print(f"Error desactivant follow me: {e}")
+        car.stop()
+
 
 actions_dict = {
     "shake head":shake_head, 
@@ -249,6 +287,10 @@ actions_dict = {
     "advance": advance_20cm,
     "avanci": advance_20cm,
     "forward 20cm": advance_20cm,
+    "follow me": start_follow_me,
+    "segueix-me": start_follow_me,
+    "stop follow me": stop_follow_me,
+    "atura seguiment": stop_follow_me,
 }
 
 sounds_dict = {

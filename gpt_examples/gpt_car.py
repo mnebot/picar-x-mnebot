@@ -291,6 +291,118 @@ person_detection_thread = threading.Thread(target=person_detection_handler)
 person_detection_thread.daemon = True
 
 
+# follow me thread - segueix la persona detectada
+# =================================================================
+follow_me_active = False  # Desactivat per defecte - s'activa amb l'acció "follow me"
+follow_me_lock = threading.Lock()
+
+def clamp_number(num, a, b):
+    """Limita un número entre a i b"""
+    return max(min(num, max(a, b)), min(a, b))
+
+def follow_me_handler():
+    """Fil que fa que el robot segueixi la persona detectada"""
+    global follow_me_active
+    
+    if not with_img:
+        return
+    
+    # Esperar una mica per assegurar que Vilib està completament inicialitzat
+    time.sleep(1.5)
+    
+    # Configuració
+    CAMERA_WIDTH = 640
+    CAMERA_HEIGHT = 480
+    CAMERA_CENTER_X = CAMERA_WIDTH / 2
+    CAMERA_CENTER_Y = CAMERA_HEIGHT / 2
+    
+    # Distàncies de seguretat (cm)
+    MIN_DISTANCE = 25
+    OPTIMAL_DISTANCE = 50
+    MAX_DISTANCE = 80
+    SAFE_DISTANCE = 200
+    
+    # Velocitats
+    BASE_SPEED = 30
+    TURN_ANGLE_MAX = 30
+    
+    # Toleràncies
+    CENTER_TOLERANCE_X = 50
+    CENTER_TOLERANCE_Y = 50
+    
+    # Angles actuals
+    cam_pan_angle = 0
+    cam_tilt_angle = DEFAULT_HEAD_TILT
+    dir_angle = 0
+    
+    while True:
+        try:
+            with follow_me_lock:
+                _active = follow_me_active
+            
+            if not _active:
+                time.sleep(0.1)
+                continue
+            
+            # Comprovar si hi ha una persona detectada
+            if Vilib.detect_obj_parameter['human_n'] != 0:
+                # Obtenir posició de la persona
+                person_x = Vilib.detect_obj_parameter['human_x']
+                person_y = Vilib.detect_obj_parameter['human_y']
+                
+                # Calcular desplaçament respecte al centre
+                offset_x = person_x - CAMERA_CENTER_X
+                offset_y = person_y - CAMERA_CENTER_Y
+                
+                # 1. SEGUIMENT AMB LA CÀMERA (pan/tilt)
+                if abs(offset_x) > CENTER_TOLERANCE_X:
+                    cam_pan_angle += (offset_x * 10 / CAMERA_WIDTH) - 5
+                    cam_pan_angle = clamp_number(cam_pan_angle, -90, 90)
+                    my_car.set_cam_pan_angle(cam_pan_angle)
+                
+                if abs(offset_y) > CENTER_TOLERANCE_Y:
+                    cam_tilt_angle -= (offset_y * 10 / CAMERA_HEIGHT) - 5
+                    cam_tilt_angle = clamp_number(cam_tilt_angle, -35, 65)
+                    my_car.set_cam_tilt_angle(cam_tilt_angle)
+                
+                # 2. MOVIMENT DEL ROBOT
+                # Obtenir distància amb sensor ultrasònic
+                distance = my_car.get_distance()
+                
+                # Calcular angle de gir basat en la posició de la persona
+                if abs(offset_x) > CENTER_TOLERANCE_X:
+                    turn_ratio = offset_x / (CAMERA_WIDTH / 2)
+                    dir_angle = clamp_number(turn_ratio * TURN_ANGLE_MAX, -TURN_ANGLE_MAX, TURN_ANGLE_MAX)
+                    my_car.set_dir_servo_angle(dir_angle)
+                else:
+                    dir_angle = 0
+                    my_car.set_dir_servo_angle(dir_angle)
+                
+                # Decidir moviment endavant/endarrere basat en distància
+                if distance < MIN_DISTANCE:
+                    my_car.backward(BASE_SPEED)
+                elif distance < OPTIMAL_DISTANCE:
+                    my_car.stop()
+                elif distance <= MAX_DISTANCE:
+                    my_car.forward(BASE_SPEED)
+                elif distance <= SAFE_DISTANCE:
+                    my_car.forward(BASE_SPEED + 20)
+                else:
+                    my_car.stop()
+            else:
+                # No hi ha persona detectada - aturar
+                my_car.stop()
+            
+        except Exception as e:
+            print(f'Error en follow me: {e}')
+            my_car.stop()
+        
+        time.sleep(0.05)  # Petit delay per controlar la freqüència del loop
+
+follow_me_thread = threading.Thread(target=follow_me_handler)
+follow_me_thread.daemon = True
+
+
 # main
 # =================================================================
 def main():
@@ -306,6 +418,7 @@ def main():
     action_thread.start()
     if with_img:
         person_detection_thread.start()  # Iniciar detecció de persones
+        follow_me_thread.start()  # Iniciar fil de seguiment (desactivat per defecte)
 
     while True:
         if input_mode == 'voice':
