@@ -205,7 +205,7 @@ def action_handler():
             if last_action_status != 'think':
                 last_action_status = 'think'
                 # think(my_car)
-                keep_think(my_car)
+                # keep_think(my_car)  # Desactivat: no fer moviment del cap quan pensa
         elif _state == 'actions':
             last_action_status = 'actions'
             with action_lock:
@@ -291,6 +291,52 @@ person_detection_thread = threading.Thread(target=person_detection_handler)
 person_detection_thread.daemon = True
 
 
+# visual tracking thread - seguiment visual pur amb càmera (FASE 1, PAS 1)
+# =================================================================
+def clamp_number(num, a, b):
+    """Limita un número entre a i b"""
+    return max(min(num, max(a, b)), min(a, b))
+
+def visual_tracking_handler():
+    """Fil que fa seguiment visual pur amb la càmera (pan/tilt) basat en stare_at_you.py"""
+    global my_car
+    
+    if not with_img:
+        return
+    
+    # Esperar una mica per assegurar que Vilib està completament inicialitzat
+    time.sleep(1.0)
+    
+    # Angles actuals de la càmera
+    x_angle = 0
+    y_angle = DEFAULT_HEAD_TILT
+    
+    while True:
+        try:
+            # Comprovar si hi ha una persona detectada
+            if Vilib.detect_obj_parameter.get('human_n', 0) != 0:
+                coordinate_x = Vilib.detect_obj_parameter['human_x']
+                coordinate_y = Vilib.detect_obj_parameter['human_y']
+                
+                # Canviar l'angle pan-tilt per seguir l'objecte (igual que stare_at_you.py)
+                x_angle += (coordinate_x * 10 / 640) - 5
+                x_angle = clamp_number(x_angle, -35, 35)
+                my_car.set_cam_pan_angle(x_angle)
+                
+                y_angle -= (coordinate_y * 10 / 480) - 5
+                y_angle = clamp_number(y_angle, -35, 35)
+                my_car.set_cam_tilt_angle(y_angle)
+            
+            time.sleep(0.05)
+            
+        except Exception as e:
+            print(f'Error en seguiment visual: {e}')
+            time.sleep(0.1)
+
+visual_tracking_thread = threading.Thread(target=visual_tracking_handler)
+visual_tracking_thread.daemon = True
+
+
 # main
 # =================================================================
 def main():
@@ -305,7 +351,8 @@ def main():
     speak_thread.start()
     action_thread.start()
     if with_img:
-        person_detection_thread.start()  # Iniciar detecció de persones
+        # person_detection_thread.start()  # Desactivat: no dir "Hola" automàticament
+        visual_tracking_thread.start()  # Iniciar seguiment visual pur (FASE 1, PAS 1)
 
     while True:
         if input_mode == 'voice':
