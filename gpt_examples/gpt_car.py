@@ -291,47 +291,18 @@ person_detection_thread = threading.Thread(target=person_detection_handler)
 person_detection_thread.daemon = True
 
 
-# visual tracking thread - seguiment visual pur amb càmera (FASE 1, PAS 1)
+# visual tracking thread - seguiment visual pur amb càmera (FASE 1, PAS 2)
 # =================================================================
-def clamp_number(num, a, b):
-    """Limita un número entre a i b"""
-    return max(min(num, max(a, b)), min(a, b))
+from visual_tracking import create_visual_tracking_handler
 
-def visual_tracking_handler():
-    """Fil que fa seguiment visual pur amb la càmera (pan/tilt) basat en stare_at_you.py"""
-    global my_car
-    
-    if not with_img:
-        return
-    
-    # Esperar una mica per assegurar que Vilib està completament inicialitzat
-    time.sleep(1.0)
-    
-    # Angles actuals de la càmera
-    x_angle = 0
-    y_angle = DEFAULT_HEAD_TILT
-    
-    while True:
-        try:
-            # Comprovar si hi ha una persona detectada
-            if Vilib.detect_obj_parameter.get('human_n', 0) != 0:
-                coordinate_x = Vilib.detect_obj_parameter['human_x']
-                coordinate_y = Vilib.detect_obj_parameter['human_y']
-                
-                # Canviar l'angle pan-tilt per seguir l'objecte (igual que stare_at_you.py)
-                x_angle += (coordinate_x * 10 / 640) - 5
-                x_angle = clamp_number(x_angle, -35, 35)
-                my_car.set_cam_pan_angle(x_angle)
-                
-                y_angle -= (coordinate_y * 10 / 480) - 5
-                y_angle = clamp_number(y_angle, -35, 35)
-                my_car.set_cam_tilt_angle(y_angle)
-            
-            time.sleep(0.05)
-            
-        except Exception as e:
-            print(f'Error en seguiment visual: {e}')
-            time.sleep(0.1)
+# Crear handler de seguiment visual (Vilib ja està importat abans si with_img)
+Vilib_module = Vilib if with_img and 'Vilib' in globals() else None
+visual_tracking_handler = create_visual_tracking_handler(
+    my_car, 
+    Vilib_module, 
+    with_img, 
+    DEFAULT_HEAD_TILT
+)
 
 visual_tracking_thread = threading.Thread(target=visual_tracking_handler)
 visual_tracking_thread.daemon = True
