@@ -1,9 +1,11 @@
 """
 Mòdul de seguiment visual per al picar-x
 Implementa seguiment visual pur amb càmera (pan/tilt) amb filtre de suavització
+i detecció de persona centrada (FASE 1, PAS 3)
 """
 
 import time
+import threading
 
 
 def clamp_number(num, a, b):
@@ -13,7 +15,7 @@ def clamp_number(num, a, b):
 
 def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
     """
-    Crea i retorna el handler de seguiment visual
+    Crea i retorna el handler de seguiment visual amb detecció de persona centrada
     
     Args:
         car: Instància de Picarx
@@ -22,8 +24,16 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
         default_head_tilt: Angle per defecte del tilt de la càmera
     
     Returns:
-        Funció handler que es pot executar en un thread
+        Tupla (handler_function, state_dict, lock, is_person_centered_func) on:
+        - handler_function: Funció handler que es pot executar en un thread
+        - state_dict: Diccionari amb l'estat (centered: bool)
+        - lock: Lock per accedir a l'estat de forma thread-safe
+        - is_person_centered_func: Funció per consultar si la persona està centrada
     """
+    
+    # Estat compartit
+    state = {'centered': False}
+    state_lock = threading.Lock()
     
     def visual_tracking_handler():
         """Fil que fa seguiment visual pur amb la càmera (pan/tilt) amb filtre de suavització"""
@@ -33,6 +43,13 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
         
         # Esperar una mica per assegurar que Vilib està completament inicialitzat
         time.sleep(1.0)
+        
+        # Configuració de zona central (FASE 1, PAS 3)
+        CAMERA_WIDTH = 640
+        CAMERA_HEIGHT = 480
+        CAMERA_CENTER_X = CAMERA_WIDTH / 2
+        CAMERA_CENTER_Y = CAMERA_HEIGHT / 2
+        CENTER_ZONE_TOLERANCE = 30  # ±30 píxels del centre
         
         # Configuració del filtre de suavització
         DETECTION_HISTORY_SIZE = 5  # Mantenir últimes 5 deteccions
@@ -80,6 +97,17 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
                         smoothed_x = coordinate_x
                         smoothed_y = coordinate_y
                     
+                    # Calcular desplaçament respecte al centre (FASE 1, PAS 3)
+                    offset_x = smoothed_x - CAMERA_CENTER_X
+                    offset_y = smoothed_y - CAMERA_CENTER_Y
+                    
+                    # Detectar si està centrada (FASE 1, PAS 3)
+                    is_centered = abs(offset_x) < CENTER_ZONE_TOLERANCE and abs(offset_y) < CENTER_ZONE_TOLERANCE
+                    
+                    # Actualitzar estat global
+                    with state_lock:
+                        state['centered'] = is_centered
+                    
                     # Calcular canvi d'angle desitjat
                     desired_x_change = (smoothed_x * 10 / 640) - 5
                     desired_y_change = -((smoothed_y * 10 / 480) - 5)  # Negatiu per tilt
@@ -97,9 +125,11 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
                     y_angle = clamp_number(y_angle, -35, 35)
                     car.set_cam_tilt_angle(y_angle)
                 else:
-                    # Si no hi ha detecció, buidar l'històric per evitar valors antics
+                    # Si no hi ha detecció, buidar l'històric i actualitzar estat
                     detection_history['x'].clear()
                     detection_history['y'].clear()
+                    with state_lock:
+                        state['centered'] = False
                 
                 time.sleep(0.05)
                 
@@ -107,5 +137,10 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
                 print(f'[Visual Tracking] Error: {e}')
                 time.sleep(0.1)
     
-    return visual_tracking_handler
+    def is_person_centered():
+        """Retorna True si la persona detectada està centrada a la imatge"""
+        with state_lock:
+            return state['centered']
+    
+    return visual_tracking_handler, state, state_lock, is_person_centered
 

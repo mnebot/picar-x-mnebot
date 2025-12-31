@@ -291,13 +291,13 @@ person_detection_thread = threading.Thread(target=person_detection_handler)
 person_detection_thread.daemon = True
 
 
-# visual tracking thread - seguiment visual pur amb càmera (FASE 1, PAS 2)
+# visual tracking thread - seguiment visual pur amb càmera (FASE 1, PAS 2 i 3)
 # =================================================================
 from visual_tracking import create_visual_tracking_handler
 
 # Crear handler de seguiment visual (Vilib ja està importat abans si with_img)
 Vilib_module = Vilib if with_img and 'Vilib' in globals() else None
-visual_tracking_handler = create_visual_tracking_handler(
+visual_tracking_handler, visual_tracking_state, visual_tracking_lock, is_person_centered = create_visual_tracking_handler(
     my_car, 
     Vilib_module, 
     with_img, 
