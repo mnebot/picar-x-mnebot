@@ -1,0 +1,556 @@
+PLA DE MILLORA PER AL SEGUIMENT DEL PICAR-X
+============================================
+
+Aquest document conté dos plans:
+1. PLA A: Millorar el codi actual de la branca feat/segueix
+2. PLA B: Estratègia alternativa partint de main
+
+================================================================================
+PLA A: MILLORAR EL CODI ACTUAL (feat/segueix)
+================================================================================
+
+ANÀLISI DELS PROBLEMES ACTUALS
+-------------------------------
+
+Després d'analitzar el codi actual, s'han identificat els següents problemes:
+
+1. **Càlcul de moviment de càmera incorrecte**
+   - Línia 311: `cam_pan_angle += (offset_x * 10 / CAMERA_WIDTH) - 5`
+   - El "-5" constant és estrany i pot causar drift
+   - Comparar amb example/8.stare_at_you.py que funciona: `x_angle +=(coordinate_x*10/640)-5`
+   - El problema: s'està acumulant l'angle sense considerar la posició actual de la càmera
+
+2. **Moviments bruscos i sense suavització**
+   - No hi ha filtre de les deteccions (ruïna temporal)
+   - Els canvis d'angle són directes, sense transició suau
+   - La velocitat del robot és fixa, no s'ajusta segons la distància
+
+3. **Lògica de distància massa simple**
+   - Només utilitza sensor ultrasònic (pot ser poc fiable en certs angles)
+   - No combina amb estimació visual (mida de la persona)
+   - Els llindars són fixos i poden no ser òptims
+
+4. **Conflicte entre moviment de càmera i moviment del robot**
+   - Quan la càmera gira, la posició de la persona canvia, però el càlcul no ho considera
+   - No hi ha coordinació entre pan/tilt i direcció del robot
+
+5. **Falta de control PID**
+   - Els moviments són reactius, no predictius
+   - No hi ha correcció d'errors acumulats
+   - No hi ha previsió de moviment
+
+6. **Problemes de sincronització**
+   - El loop corre a 20Hz (0.05s) però pot ser massa ràpid per alguns sensors
+   - No hi ha debouncing de les deteccions
+
+7. **Falta de feedback i debugging**
+   - Encara que hi ha alguns prints, no hi ha manera de veure l'estat complet
+   - No es pot saber si el problema és detecció, càlcul o moviment
+
+
+FASES DE MILLORA (PLA A)
+-------------------------
+
+FASE 1: CORRECCIÓ DE BUGS CRÍTICS (Prioritat ALTA)
+---------------------------------------------------
+
+1.1. Corregir càlcul de pan/tilt de la càmera
+   - Eliminar el "-5" constant que causa drift
+   - Utilitzar la fórmula de stare_at_you.py com a referència
+   - Afegir limitació adequada dels angles (-35 a 35 per pan, -35 a 35 per tilt)
+   - Assegurar que els angles es mantinguin dins dels límits físics
+
+1.2. Millorar gestió d'errors
+   - Afegir try/except més específic per a cada operació
+   - Validar que human_x i human_y existeixen abans d'usar-los
+   - Afegir fallback quan detect_obj_parameter no està disponible
+
+1.3. Corregir inicialització
+   - Assegurar que cam_pan_angle i cam_tilt_angle s'inicialitzen correctament
+   - Sincronitzar angles inicials amb DEFAULT_HEAD_PAN i DEFAULT_HEAD_TILT
+
+
+FASE 2: SUAVITZACIÓ DE MOVIMENTS (Prioritat ALTA)
+--------------------------------------------------
+
+2.1. Implementar filtre de mitjana mòbil per deteccions
+   - Mantenir històric de les últimes 5-10 deteccions
+   - Utilitzar mitjana ponderada (més pes a deteccions recents)
+   - Reduir efecte de deteccions errònies temporals
+
+2.2. Suavitzar canvis d'angle de càmera
+   - En lloc de canvis bruscos, fer transicions graduals
+   - Limitar velocitat de canvi d'angle (max 5 graus per iteració)
+   - Utilitzar interpolació lineal per moviments de càmera
+
+2.3. Suavitzar moviment del robot
+   - Acceleració/desacceleració gradual
+   - No canviar direcció bruscament
+   - Aturar abans de canviar de direcció (endavant -> endarrere)
+
+
+FASE 3: MILLORAR LÒGICA DE DISTÀNCIA (Prioritat MITJA)
+-------------------------------------------------------
+
+3.1. Combinar sensor ultrasònic amb estimació visual
+   - Utilitzar human_w i human_h per estimar distància
+   - Calcular distància estimada: distance_est = (reference_size / current_size) * reference_distance
+   - Combinar amb sensor ultrasònic: distance = 0.7 * ultrasonic + 0.3 * estimated
+   - Validar que les dues mesures siguin consistents (si difereixen massa, usar només ultrasonic)
+
+3.2. Ajustar llindars de distància
+   - Provar valors diferents segons entorn
+   - Fer-los configurables
+   - Afegir zona morta per evitar oscil·lacions (ex: 45-55cm = aturat)
+
+
+FASE 4: IMPLEMENTAR CONTROL PID BÀSIC (Prioritat MITJA)
+---------------------------------------------------------
+
+4.1. PID per seguiment horitzontal (gir del robot)
+   - Error = offset_x (posició persona respecte centre)
+   - Kp = 0.5 (proporcional)
+   - Ki = 0.01 (integral - petit per evitar windup)
+   - Kd = 0.1 (derivatiu)
+   - Aplicar a dir_angle
+
+4.2. PID per distància
+   - Error = distance - OPTIMAL_DISTANCE
+   - Kp = 0.8
+   - Ki = 0.02
+   - Kd = 0.15
+   - Aplicar a velocitat (forward/backward)
+
+4.3. PID per càmera (opcional, menys crític)
+   - Similar als anteriors però per pan/tilt
+   - Valors més petits (Kp = 0.3)
+
+
+FASE 5: COORDINACIÓ CÀMERA-ROBOT (Prioritat MITJA-BAIXA)
+---------------------------------------------------------
+
+5.1. Considerar angle de la càmera en càlculs
+   - Quan la càmera està girada, ajustar càlculs de posició
+   - Compensar offset_x segons cam_pan_angle
+
+5.2. Estratègia de seguiment en dues fases
+   - Fase 1: Centrar persona amb càmera (pan/tilt)
+   - Fase 2: Quan està centrada, moure el robot
+   - Evitar moure robot mentre la càmera encara s'ajusta
+
+
+FASE 6: MILLORES DE DEBUGGING I FEEDBACK (Prioritat BAIXA)
+-----------------------------------------------------------
+
+6.1. Afegir mode de debug detallat
+   - Mostrar estat complet cada 0.5s quan està actiu
+   - Incloure: posició persona, angles càmera, distància, velocitat, errors PID
+
+6.2. Feedback visual/auditiu
+   - LED parpelleja ràpid quan segueix
+   - So de confirmació quan s'activa/desactiva
+
+6.3. Logging a fitxer (opcional)
+   - Guardar dades per anàlisi posterior
+   - Útil per ajustar paràmetres
+
+
+IMPLEMENTACIÓ RECOMANADA (Ordre d'execució)
+--------------------------------------------
+
+SETMANA 1: Fases 1 i 2 (Bugs crítics + Suavització)
+  - Corregir bugs de càlcul
+  - Implementar filtre de mitjana mòbil
+  - Suavitzar moviments
+  - Provar i ajustar
+
+SETMANA 2: Fase 3 (Distància)
+  - Implementar estimació visual
+  - Ajustar llindars
+  - Provar en diferents entorns
+
+SETMANA 3: Fase 4 (PID)
+  - Implementar PID bàsic
+  - Ajustar constants (tuning)
+  - Comparar amb versió anterior
+
+SETMANA 4: Fases 5 i 6 (Coordinació + Debug)
+  - Millorar coordinació
+  - Afegir debugging
+  - Documentació final
+
+
+CODI D'EXEMPLE PER FILTRE DE MITJANA MÒBIL
+-------------------------------------------
+
+```python
+# Al principi de follow_me_handler, afegir:
+detection_history = {
+    'x': [],
+    'y': [],
+    'distance': []
+}
+HISTORY_SIZE = 5
+
+# Dins del loop, quan es detecta persona:
+if human_n != 0:
+    person_x = Vilib.detect_obj_parameter['human_x']
+    person_y = Vilib.detect_obj_parameter['human_y']
+    distance = my_car.get_distance()
+    
+    # Afegir a històric
+    detection_history['x'].append(person_x)
+    detection_history['y'].append(person_y)
+    detection_history['distance'].append(distance)
+    
+    # Mantenir només últims N valors
+    for key in detection_history:
+        if len(detection_history[key]) > HISTORY_SIZE:
+            detection_history[key].pop(0)
+    
+    # Calcular mitjana ponderada (més pes a valors recents)
+    weights = [0.1, 0.15, 0.2, 0.25, 0.3]  # Pesos per últims 5 valors
+    if len(detection_history['x']) >= 2:
+        person_x = sum(x * w for x, w in zip(detection_history['x'], weights[-len(detection_history['x']):])) / sum(weights[-len(detection_history['x']):])
+        person_y = sum(y * w for y, w in zip(detection_history['y'], weights[-len(detection_history['y']):])) / sum(weights[-len(detection_history['y']):])
+        distance = sum(d * w for d, w in zip(detection_history['distance'], weights[-len(detection_history['distance']):])) / sum(weights[-len(detection_history['distance']):])
+```
+
+
+CODI D'EXEMPLE PER CONTROL PID
+-------------------------------
+
+```python
+class SimplePID:
+    def __init__(self, kp, ki, kd, max_output=100):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.max_output = max_output
+        self.integral = 0
+        self.last_error = 0
+    
+    def compute(self, error, dt=0.05):
+        # Proporcional
+        p = self.kp * error
+        
+        # Integral (amb anti-windup)
+        self.integral += error * dt
+        self.integral = max(-self.max_output, min(self.max_output, self.integral))
+        i = self.ki * self.integral
+        
+        # Derivatiu
+        d = self.kd * (error - self.last_error) / dt
+        self.last_error = error
+        
+        # Sortida
+        output = p + i + d
+        return max(-self.max_output, min(self.max_output, output))
+
+# Dins follow_me_handler:
+pid_turn = SimplePID(kp=0.5, ki=0.01, kd=0.1, max_output=30)
+pid_distance = SimplePID(kp=0.8, ki=0.02, kd=0.15, max_output=50)
+
+# Al calcular moviment:
+turn_error = offset_x / (CAMERA_WIDTH / 2)  # Normalitzat -1 a 1
+dir_angle = pid_turn.compute(turn_error)
+dir_angle = clamp_number(dir_angle, -TURN_ANGLE_MAX, TURN_ANGLE_MAX)
+
+distance_error = distance - OPTIMAL_DISTANCE
+speed_adjustment = pid_distance.compute(distance_error)
+base_speed = BASE_SPEED + int(speed_adjustment)
+```
+
+
+================================================================================
+PLA B: ESTRATÈGIA ALTERNATIVA PARTINT DE MAIN
+================================================================================
+
+FILOSOFIA DE L'ESTRATÈGIA ALTERNATIVA
+--------------------------------------
+
+En lloc de seguir una persona movent el robot complet, aquesta estratègia es basa en:
+1. **Seguiment visual pur amb càmera** (com stare_at_you.py)
+2. **Moviment del robot només quan la persona surt del camp de visió**
+3. **Aproximació gradual quan la persona està centrada**
+4. **Estratègia de "mira i mou" en comptes de "segueix continuament"**
+
+Aquesta estratègia és més simple, menys propensa a errors, i més fàcil de depurar.
+
+
+FASES DE LA NOVA IMPLEMENTACIÓ (PLA B)
+---------------------------------------
+
+FASE 1: SEGUIMENT VISUAL PUR (Base)
+------------------------------------
+
+1.1. Implementar seguiment de càmera (pan/tilt) basat en stare_at_you.py
+   - Utilitzar exactament la mateixa lògica que funciona
+   - Centrar la persona a la imatge amb pan/tilt
+   - No moure el robot encara
+
+1.2. Afegir filtre de suavització per càmera
+   - Mitjana mòbil de 3-5 deteccions
+   - Limitar velocitat de canvi d'angle
+
+1.3. Detectar quan la persona està "centrada"
+   - Definir zona central (ex: ±30 píxels del centre)
+   - Mantenir estat: "centrada" o "no centrada"
+
+
+FASE 2: MOVIMENT REACTIU (Quan surt del camp de visió)
+------------------------------------------------------
+
+2.1. Detectar quan la persona surt del camp de visió
+   - Si no es detecta persona durant 0.5s
+   - Recordar última posició coneguda (dreta/esquerra)
+   - Girar el robot cap a la direcció on va la persona
+
+2.2. Estratègia de recerca
+   - Girar 30 graus cap a la direcció on va la persona
+   - Aturar i buscar amb càmera
+   - Si no es troba, girar una mica més
+   - Repetir fins a trobar o timeout (5s)
+
+2.3. Quan es troba de nou
+   - Centrar amb càmera primer
+   - Després moure cap a la persona si està massa lluny
+
+
+FASE 3: APROXIMACIÓ QUAN ESTÀ CENTRADA
+---------------------------------------
+
+3.1. Quan la persona està centrada a la imatge
+   - Llegir distància amb sensor ultrasònic
+   - Si distància > OPTIMAL_DISTANCE + 10cm: avançar lentament
+   - Si distància < OPTIMAL_DISTANCE - 10cm: retrocedir lentament
+   - Si està dins zona òptima: aturar
+
+3.2. Velocitat adaptativa
+   - Velocitat proporcional a l'error de distància
+   - Màxim 30% de velocitat
+   - Aturar si error < 5cm
+
+
+FASE 4: ESTATS I MÀQUINA D'ESTATS
+----------------------------------
+
+4.1. Definir estats del sistema
+   - STATE_SEARCHING: Buscant persona (girant, movent càmera)
+   - STATE_TRACKING: Seguint amb càmera (persona visible)
+   - STATE_APPROACHING: Aproximant-se (persona centrada, ajustant distància)
+   - STATE_LOST: Persona perduda (recerca activa)
+
+4.2. Transicions d'estat
+   - SEARCHING -> TRACKING: Persona detectada
+   - TRACKING -> APPROACHING: Persona centrada durant 0.3s
+   - APPROACHING -> TRACKING: Persona desviada
+   - TRACKING -> LOST: Persona no detectada durant 0.5s
+   - LOST -> SEARCHING: Iniciar recerca
+   - LOST -> TRACKING: Persona trobada durant recerca
+
+4.3. Comportament per estat
+   - Cada estat té comportament clar i definit
+   - Facilita debugging i millores
+
+
+FASE 5: MILLORES AVANÇADES (Opcional)
+--------------------------------------
+
+5.1. Predicció de moviment
+   - Si la persona es mou consistentment en una direcció, predir on anirà
+   - Començar a girar abans que surti del camp de visió
+
+5.2. Evitació d'obstacles
+   - Si sensor detecta obstacle mentre s'aproxima, aturar
+   - Buscar camí alternatiu
+
+5.3. Seguiment de múltiples persones
+   - Si hi ha diverses persones, seguir la més propera o central
+
+
+ESTRUCTURA DEL CODI (PLA B)
+----------------------------
+
+```python
+# Estats
+STATE_SEARCHING = 'searching'
+STATE_TRACKING = 'tracking'
+STATE_APPROACHING = 'approaching'
+STATE_LOST = 'lost'
+
+# Variables d'estat
+current_state = STATE_SEARCHING
+person_centered_time = 0
+last_detection_time = 0
+last_person_direction = None  # 'left' o 'right'
+
+def follow_me_handler_v2():
+    global current_state, person_centered_time, last_detection_time
+    
+    # Configuració
+    CENTER_ZONE = 30  # píxels
+    OPTIMAL_DISTANCE = 50  # cm
+    DISTANCE_TOLERANCE = 10  # cm
+    
+    # Filtre per càmera
+    cam_pan_angle = 0
+    cam_tilt_angle = DEFAULT_HEAD_TILT
+    detection_buffer = []
+    
+    while True:
+        if not follow_me_active:
+            time.sleep(0.1)
+            continue
+        
+        try:
+            human_n = Vilib.detect_obj_parameter.get('human_n', 0)
+            
+            if human_n != 0:
+                last_detection_time = time.time()
+                person_x = Vilib.detect_obj_parameter['human_x']
+                person_y = Vilib.detect_obj_parameter['human_y']
+                
+                # Filtrar detecció
+                detection_buffer.append((person_x, person_y))
+                if len(detection_buffer) > 5:
+                    detection_buffer.pop(0)
+                person_x = sum(x for x, y in detection_buffer) / len(detection_buffer)
+                person_y = sum(y for x, y in detection_buffer) / len(detection_buffer)
+                
+                # Calcular offset
+                offset_x = person_x - CAMERA_CENTER_X
+                offset_y = person_y - CAMERA_CENTER_Y
+                
+                # Seguiment amb càmera (igual que stare_at_you.py)
+                if abs(offset_x) > 5:  # Zona morta petita
+                    cam_pan_angle += (offset_x * 10 / 640) - 5
+                    cam_pan_angle = clamp_number(cam_pan_angle, -35, 35)
+                    my_car.set_cam_pan_angle(cam_pan_angle)
+                
+                if abs(offset_y) > 5:
+                    cam_tilt_angle -= (offset_y * 10 / 480) - 5
+                    cam_tilt_angle = clamp_number(cam_tilt_angle, -35, 35)
+                    my_car.set_cam_tilt_angle(cam_tilt_angle)
+                
+                # Determinar si està centrada
+                is_centered = abs(offset_x) < CENTER_ZONE and abs(offset_y) < CENTER_ZONE
+                
+                # Màquina d'estats
+                if current_state == STATE_SEARCHING:
+                    if is_centered:
+                        current_state = STATE_APPROACHING
+                        person_centered_time = time.time()
+                    else:
+                        current_state = STATE_TRACKING
+                
+                elif current_state == STATE_TRACKING:
+                    if is_centered and (time.time() - person_centered_time) > 0.3:
+                        current_state = STATE_APPROACHING
+                        person_centered_time = time.time()
+                    elif not is_centered:
+                        person_centered_time = 0
+                
+                elif current_state == STATE_APPROACHING:
+                    if not is_centered:
+                        current_state = STATE_TRACKING
+                        my_car.stop()
+                    else:
+                        # Ajustar distància
+                        distance = my_car.get_distance()
+                        distance_error = distance - OPTIMAL_DISTANCE
+                        
+                        if abs(distance_error) > DISTANCE_TOLERANCE:
+                            if distance_error > 0:
+                                # Massa lluny, avançar
+                                speed = min(30, int(20 + distance_error * 0.5))
+                                my_car.forward(speed)
+                            else:
+                                # Massa a prop, retrocedir
+                                speed = min(30, int(20 + abs(distance_error) * 0.5))
+                                my_car.backward(speed)
+                        else:
+                            my_car.stop()
+                
+                # Recordar direcció per si es perd
+                if offset_x > 0:
+                    last_person_direction = 'right'
+                else:
+                    last_person_direction = 'left'
+            
+            else:
+                # No es detecta persona
+                if current_state != STATE_LOST:
+                    if time.time() - last_detection_time > 0.5:
+                        current_state = STATE_LOST
+                        my_car.stop()
+                
+                elif current_state == STATE_LOST:
+                    # Recerca activa
+                    if last_person_direction:
+                        # Girar cap a la direcció on va la persona
+                        if last_person_direction == 'right':
+                            my_car.set_dir_servo_angle(20)
+                            my_car.forward(20)
+                        else:
+                            my_car.set_dir_servo_angle(-20)
+                            my_car.forward(20)
+                        
+                        time.sleep(0.3)
+                        my_car.stop()
+                        my_car.set_dir_servo_angle(0)
+                    
+                    # Si no es troba després de 3s, tornar a SEARCHING
+                    if time.time() - last_detection_time > 3.0:
+                        current_state = STATE_SEARCHING
+                        last_person_direction = None
+            
+        except Exception as e:
+            print(f'[Follow Me] Error: {e}')
+            my_car.stop()
+        
+        time.sleep(0.05)
+```
+
+
+COMPARACIÓ DE LES DUES ESTRATÈGIES
+-----------------------------------
+
+PLA A (Millorar actual):
++ Manté la idea original de seguiment continu
++ Pot ser més fluid quan funciona
++ Més proper a seguiment "real"
+- Més complex de depurar
+- Més propens a errors
+- Requereix més ajustos
+
+PLA B (Estratègia alternativa):
++ Més simple i robust
++ Més fàcil de depurar (estats clars)
++ Basat en codi que ja funciona (stare_at_you.py)
++ Menys propens a errors
+- Pot ser menys "fluïd" visualment
+- Moviment més "reactiu" que "proactiu"
+
+
+RECOMANACIÓ
+-----------
+
+Es recomana començar amb el PLA B per les següents raons:
+1. És més simple i té menys punts de fallada
+2. Es basa en codi que ja funciona (stare_at_you.py)
+3. És més fàcil de depurar i millorar incrementalment
+4. Si funciona bé, es pot afegir complexitat després
+
+Si el PLA B funciona bé, es poden afegir millores del PLA A (PID, estimació visual, etc.) de forma incremental.
+
+
+PROPERES PASSOS
+---------------
+
+1. Decidir quina estratègia seguir (A o B)
+2. Si es tria A: Començar per Fase 1 (correcció de bugs)
+3. Si es tria B: Implementar Fase 1 (seguiment visual pur)
+4. Provar en entorn real
+5. Iterar i millorar segons resultats
+
