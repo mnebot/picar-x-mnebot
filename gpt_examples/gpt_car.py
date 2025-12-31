@@ -205,7 +205,7 @@ def action_handler():
             if last_action_status != 'think':
                 last_action_status = 'think'
                 # think(my_car)
-                keep_think(my_car)
+                # keep_think(my_car)  # Desactivat: no fer moviment del cap quan pensa
         elif _state == 'actions':
             last_action_status = 'actions'
             with action_lock:
@@ -351,7 +351,7 @@ def main():
     speak_thread.start()
     action_thread.start()
     if with_img:
-        person_detection_thread.start()  # Iniciar detecció de persones
+        # person_detection_thread.start()  # Desactivat: no dir "Hola" automàticament
         visual_tracking_thread.start()  # Iniciar seguiment visual pur (FASE 1, PAS 1)
 
     while True:
