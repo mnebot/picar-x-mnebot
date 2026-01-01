@@ -52,6 +52,14 @@ documentació del codi:
    - Documentar dependències problemàtiques
    - Prioritzar deute tècnic segons impacte i esforç
 
+6. **Actualització del README**
+   - Actualitzar README.md amb les noves funcionalitats implementades
+   - Documentar canvis en l'arquitectura o estructura del codi
+   - Afegir/explicar noves dependències si n'hi ha
+   - Actualitzar instruccions d'ús si han canviat
+   - Documentar noves funcionalitats i com utilitzar-les
+   - Mantenir README actualitzat amb l'estat actual del projecte
+
 **Nota:** Aquestes tasques s'apliquen al final de cada fase. Per evitar repetició,
 aquestes tasques es referencien com "Tasques de finalització de fase" al final
 de cada fase del pla.
