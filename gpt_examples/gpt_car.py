@@ -2,6 +2,7 @@ from openai_helper import OpenAiHelper
 from keys import OPENAI_API_KEY, OPENAI_ASSISTANT_ID
 from preset_actions import *
 from utils import *
+from visual_tracking import create_visual_tracking_handler
 
 import readline # optimize keyboard input, only need to import
 
@@ -293,8 +294,6 @@ person_detection_thread.daemon = True
 
 # visual tracking thread - seguiment visual pur amb càmera (FASE 1, PAS 2 i 3)
 # =================================================================
-from visual_tracking import create_visual_tracking_handler
-
 # Crear handler de seguiment visual (Vilib ja està importat abans si with_img)
 Vilib_module = Vilib if with_img and 'Vilib' in globals() else None
 visual_tracking_handler, visual_tracking_state, visual_tracking_lock, is_person_centered = create_visual_tracking_handler(
