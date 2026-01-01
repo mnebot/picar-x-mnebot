@@ -1,7 +1,7 @@
 from openai_helper import OpenAiHelper
 from keys import OPENAI_API_KEY, OPENAI_ASSISTANT_ID
-from preset_actions import *
-from utils import *
+from preset_actions import actions_dict, sounds_dict
+from utils import gray_print, speak_block, sox_volume, redirect_error_2_null, cancel_redirect_error
 from visual_tracking import create_visual_tracking_handler
 
 import readline # optimize keyboard input, only need to import
@@ -307,10 +307,241 @@ visual_tracking_thread = threading.Thread(target=visual_tracking_handler)
 visual_tracking_thread.daemon = True
 
 
+# Funcions auxiliars per refactoritzar main()
+# =================================================================
+
+def process_voice_input():
+    """
+    Processa l'entrada de veu: escolta, fa STT i retorna el resultat.
+    
+    Returns:
+        str: Text reconegut, o None si no s'ha pogut processar
+    """
+    # No resetar càmera si el seguiment visual està actiu
+    # El seguiment visual controla els angles de la càmera contínuament
+    if not with_img:
+        my_car.set_cam_pan_angle(DEFAULT_HEAD_PAN)
+        my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
+
+    gray_print("listening ...")
+
+    with action_lock:
+        action_status = 'standby'
+
+    _stderr_back = redirect_error_2_null()  # ignore error print to ignore ALSA errors
+    # If the chunk_size is set too small (default_size=1024), it may cause the program to freeze
+    with sr.Microphone(chunk_size=8192) as source:
+        cancel_redirect_error(_stderr_back)  # restore error print
+        recognizer.adjust_for_ambient_noise(source)
+        audio = recognizer.listen(source)
+
+    # stt
+    gray_print('stt ...')
+    st = time.time()
+    result = openai_helper.stt(audio, language=LANGUAGE)
+    gray_print(f"stt takes: {time.time() - st:.3f} s")
+
+    if not result or result == "":
+        return None
+    
+    return result
+
+
+def process_keyboard_input():
+    """
+    Processa l'entrada de teclat i retorna el resultat.
+    
+    Returns:
+        str: Text introduït, o None si està buit
+    """
+    # No resetar càmera si el seguiment visual està actiu
+    # El seguiment visual controla els angles de la càmera contínuament
+    if not with_img:
+        my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
+
+    with action_lock:
+        action_status = 'standby'
+
+    result = input(f'\033[1;30m{"input: "}\033[0m').encode(sys.stdin.encoding).decode('utf-8')
+
+    if not result or result == "":
+        return None
+    
+    return result
+
+
+def get_user_input():
+    """
+    Obté l'entrada de l'usuari segons el mode configurat (veu o teclat).
+    
+    Returns:
+        str: Text de l'usuari, o None si no s'ha pogut obtenir
+    """
+    if input_mode == 'voice':
+        return process_voice_input()
+    elif input_mode == 'keyboard':
+        return process_keyboard_input()
+    else:
+        raise ValueError("Invalid input mode")
+
+
+def get_gpt_response(user_input):
+    """
+    Obté la resposta de GPT per a l'entrada de l'usuari.
+    
+    Args:
+        user_input: Text de l'usuari
+        
+    Returns:
+        dict o str: Resposta de GPT
+    """
+    gray_print(f'thinking ...')
+    st = time.time()
+
+    with action_lock:
+        action_status = 'think'
+
+    if with_img:
+        img_path = os.path.join(current_path, 'img_input.jpg')
+        try:
+            cv2.imwrite(img_path, Vilib.img)
+        except Exception as e:
+            print(f'Warning: Could not write image file: {e}')
+            # Try alternative location
+            img_path = os.path.join(tempfile.gettempdir(), 'img_input.jpg')
+            try:
+                cv2.imwrite(img_path, Vilib.img)
+            except Exception as e2:
+                print(f'Warning: Could not write image to temp directory: {e2}')
+                # Fallback a diàleg sense imatge
+                response = openai_helper.dialogue(user_input)
+                gray_print(f'chat takes: {time.time() - st:.3f} s')
+                return response
+        
+        response = openai_helper.dialogue_with_img(user_input, img_path)
+    else:
+        response = openai_helper.dialogue(user_input)
+
+    gray_print(f'chat takes: {time.time() - st:.3f} s')
+    return response
+
+
+def parse_gpt_response(response):
+    """
+    Analitza la resposta de GPT i extreu accions i resposta.
+    
+    Args:
+        response: Resposta de GPT (dict o str)
+        
+    Returns:
+        tuple: (actions, answer, sound_actions)
+    """
+    actions = []
+    answer = ''
+    sound_actions = []
+    
+    try:
+        if isinstance(response, dict):
+            if 'actions' in response:
+                actions = list(response['actions'])
+            else:
+                actions = ['stop']
+
+            if 'answer' in response:
+                answer = response['answer']
+            else:
+                answer = ''
+
+            if len(answer) > 0:
+                _actions = actions.copy()  # Utilitzar .copy() en lloc de list.copy()
+                for _action in _actions:
+                    if _action in SOUND_EFFECT_ACTIONS:
+                        sound_actions.append(_action)
+                        actions.remove(_action)
+        else:
+            response_str = str(response)
+            if len(response_str) > 0:
+                actions = []
+                answer = response_str
+
+    except Exception as e:
+        print(f'Warning: Error processant resposta de GPT: {e}')
+        actions = []
+        answer = ''
+    
+    return actions, answer, sound_actions
+
+
+def execute_tts_and_actions(actions, answer, sound_actions):
+    """
+    Executa TTS i accions basades en la resposta de GPT.
+    
+    Args:
+        actions: Llista d'accions a executar
+        answer: Text per a TTS
+        sound_actions: Llista d'efectes de so
+    """
+    try:
+        # ---- tts ----
+        tts_status = False
+        if answer != '':
+            st = time.time()
+            _time = time.strftime("%y-%m-%d_%H-%M-%S", time.localtime())
+            tts_f = os.path.join(tts_dir, f"{_time}_raw.wav")
+            tts_status = openai_helper.text_to_speech(
+                answer, tts_f, TTS_VOICE, 
+                response_format='wav', 
+                instructions=VOICE_INSTRUCTIONS
+            )
+            if tts_status:
+                global tts_file
+                tts_file = os.path.join(tts_dir, f"{_time}_{VOLUME_DB}dB.wav")
+                tts_status = sox_volume(tts_f, tts_file, VOLUME_DB)
+            gray_print(f'tts takes: {time.time() - st:.3f} s')
+
+        # ---- actions ----
+        with action_lock:
+            global actions_to_be_done
+            actions_to_be_done = actions
+            gray_print(f'actions: {actions_to_be_done}')
+            action_status = 'actions'
+
+        # --- sound effects and voice ---
+        for _sound in sound_actions:
+            try:
+                sounds_dict[_sound](music)
+            except Exception as e:
+                print(f'action error: {e}')
+
+        if tts_status:
+            global speech_loaded
+            with speech_lock:
+                speech_loaded = True
+
+        # ---- wait speak done ----
+        if tts_status:
+            while True:
+                with speech_lock:
+                    if not speech_loaded:
+                        break
+                time.sleep(.01)
+
+        # ---- wait actions done ----
+        while True:
+            with action_lock:
+                if action_status != 'actions':
+                    break
+            time.sleep(.01)
+
+        print()  # new line
+
+    except Exception as e:
+        print(f'actions or TTS error: {e}')
+
+
 # main
 # =================================================================
 def main():
-    global current_feeling, last_feeling
     global speech_loaded
     global action_status, actions_to_be_done
     global tts_file, tts_dir
@@ -325,162 +556,20 @@ def main():
         visual_tracking_thread.start()  # Iniciar seguiment visual pur (FASE 1, PAS 1)
 
     while True:
-        if input_mode == 'voice':
-            # No resetar càmera si el seguiment visual està actiu
-            # El seguiment visual controla els angles de la càmera contínuament
-            if not with_img:
-                my_car.set_cam_pan_angle(DEFAULT_HEAD_PAN)
-                my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
+        # Obté entrada de l'usuari
+        user_input = get_user_input()
+        if user_input is None:
+            print()  # new line
+            continue
 
-            # listen
-            # ----------------------------------------------------------------
-            gray_print("listening ...")
+        # Obté resposta de GPT
+        response = get_gpt_response(user_input)
 
-            with action_lock:
-                action_status = 'standby'
+        # Analitza resposta i extreu accions i text
+        actions, answer, sound_actions = parse_gpt_response(response)
 
-            _stderr_back = redirect_error_2_null() # ignore error print to ignore ALSA errors
-            # If the chunk_size is set too small (default_size=1024), it may cause the program to freeze
-            with sr.Microphone(chunk_size=8192) as source:
-                cancel_redirect_error(_stderr_back) # restore error print
-                recognizer.adjust_for_ambient_noise(source)
-                audio = recognizer.listen(source)
-
-            # stt
-            # ----------------------------------------------------------------
-            gray_print('stt ...')
-            st = time.time()
-            _result = openai_helper.stt(audio, language=LANGUAGE)
-            gray_print(f"stt takes: {time.time() - st:.3f} s")
-
-            if _result == False or _result == "":
-                print() # new line
-                continue
-
-        elif input_mode == 'keyboard':
-            # No resetar càmera si el seguiment visual està actiu
-            # El seguiment visual controla els angles de la càmera contínuament
-            if not with_img:
-                my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
-
-            with action_lock:
-                action_status = 'standby'
-
-            _result = input(f'\033[1;30m{"intput: "}\033[0m').encode(sys.stdin.encoding).decode('utf-8')
-
-            if _result == False or _result == "":
-                print() # new line
-                continue
-
-        else:
-            raise ValueError("Invalid input mode")
-
-        # chat-gpt
-        # ---------------------------------------------------------------- 
-        gray_print(f'thinking ...')
-        response = {}
-        st = time.time()
-
-        with action_lock:
-            action_status = 'think'
-
-        if with_img:
-            img_path = os.path.join(current_path, 'img_imput.jpg')
-            try:
-                cv2.imwrite(img_path, Vilib.img)
-            except Exception as e:
-                print(f'Warning: Could not write image file: {e}')
-                # Try alternative location
-                img_path = os.path.join(tempfile.gettempdir(), 'img_imput.jpg')
-                cv2.imwrite(img_path, Vilib.img)
-            response = openai_helper.dialogue_with_img(_result, img_path)
-        else:
-            response = openai_helper.dialogue(_result)
-
-        gray_print(f'chat takes: {time.time() - st:.3f} s')
-
-        # actions & TTS
-        # ----------------------------------------------------------------
-        _sound_actions = [] 
-        try:
-            if isinstance(response, dict):
-                if 'actions' in response:
-                    actions = list(response['actions'])
-                else:
-                    actions = ['stop']
-
-                if 'answer' in response:
-                    answer = response['answer']
-                else:
-                    answer = ''
-
-                if len(answer) > 0:
-                    _actions = list.copy(actions)
-                    for _action in _actions:
-                        if _action in SOUND_EFFECT_ACTIONS:
-                            _sound_actions.append(_action)
-                            actions.remove(_action)
-
-            else:
-                response = str(response)
-                if len(response) > 0:
-                    actions = []
-                    answer = response
-
-        except:
-            actions = []
-            answer = ''
-    
-        try:
-            # ---- tts ----
-            _tts_status = False
-            if answer != '':
-                st = time.time()
-                _time = time.strftime("%y-%m-%d_%H-%M-%S", time.localtime())
-                _tts_f = os.path.join(tts_dir, f"{_time}_raw.wav")
-                _tts_status = openai_helper.text_to_speech(answer, _tts_f, TTS_VOICE, response_format='wav', instructions=VOICE_INSTRUCTIONS) # alloy, echo, fable, onyx, nova, and shimmer
-                if _tts_status:
-                    tts_file = os.path.join(tts_dir, f"{_time}_{VOLUME_DB}dB.wav")
-                    _tts_status = sox_volume(_tts_f, tts_file, VOLUME_DB)
-                gray_print(f'tts takes: {time.time() - st:.3f} s')
-
-            # ---- actions ----
-            with action_lock:
-                actions_to_be_done = actions
-                gray_print(f'actions: {actions_to_be_done}')
-                action_status = 'actions'
-
-            # --- sound effects and voice ---
-            for _sound in _sound_actions:
-                try:
-                    sounds_dict[_sound](music)
-                except Exception as e:
-                    print(f'action error: {e}')
-
-            if _tts_status:
-                with speech_lock:
-                    speech_loaded = True
-
-            # ---- wait speak done ----
-            if _tts_status:
-                while True:
-                    with speech_lock:
-                        if not speech_loaded:
-                            break
-                    time.sleep(.01)
-
-            # ---- wait actions done ----
-            while True:
-                with action_lock:
-                    if action_status != 'actions':
-                        break
-                time.sleep(.01)
-
-            ##
-            print() # new line
-
-        except Exception as e:
-            print(f'actions or TTS error: {e}')
+        # Executa TTS i accions
+        execute_tts_and_actions(actions, answer, sound_actions)
 
 
 if __name__ == "__main__":

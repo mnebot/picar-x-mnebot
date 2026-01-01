@@ -2,6 +2,7 @@ from openai import OpenAI
 import time
 import shutil
 import os
+import json
 
 # utils
 # =================================================================
@@ -142,9 +143,11 @@ class OpenAiHelper():
                             value = block.text.value
                             chat_print(self.assistant_name, value)
                             try:
-                                value = eval(value) # convert to dict
+                                # Utilitzar json.loads() en lloc de eval() per seguretat
+                                value = json.loads(value)  # Convertir JSON string a dict de forma segura
                                 return value
-                            except Exception as e:
+                            except (json.JSONDecodeError, ValueError) as e:
+                                # Si no és JSON vàlid, retornar com a string
                                 return str(value)
                 break # only last reply
         else:
@@ -196,9 +199,11 @@ class OpenAiHelper():
                             value = block.text.value
                             chat_print(self.assistant_name, value)
                             try:
-                                value = eval(value) # convert to dict
+                                # Utilitzar json.loads() en lloc de eval() per seguretat
+                                value = json.loads(value)  # Convertir JSON string a dict de forma segura
                                 return value
-                            except Exception as e:
+                            except (json.JSONDecodeError, ValueError) as e:
+                                # Si no és JSON vàlid, retornar com a string
                                 return str(value)
                 break # only last reply
         else:
