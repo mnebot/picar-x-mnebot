@@ -21,7 +21,12 @@ import sys
 
 os.environ['SDL_AUDIODRIVER'] = 'pulse' # PipeWire a Bookworm emula PulseAudio - necessary per a que raspberry pi 4 to work with sound
 
-os.popen("pinctrl set 20 op dh") # enable robot_hat speake switch
+# Enable robot_hat speaker switch
+try:
+    proc = os.popen("pinctrl set 20 op dh")
+    proc.close()  # Tancar el procés per evitar resource leaks
+except Exception as e:
+    print(f'Warning: Could not enable speaker switch: {e}')
 current_path = os.path.dirname(os.path.abspath(__file__))
 os.chdir(current_path) # change working directory
 
@@ -53,6 +58,11 @@ LANGUAGE = 'ca'  # Catalan language code for STT
 # VOLUME_DB = 5
 VOLUME_DB = 3
 
+# Validar VOLUME_DB dins d'un rang raonable (0-10 per evitar distorsió)
+if not isinstance(VOLUME_DB, (int, float)) or VOLUME_DB < 0 or VOLUME_DB > 10:
+    print(f'Warning: VOLUME_DB={VOLUME_DB} està fora del rang recomanat (0-10). Usant valor per defecte 3.')
+    VOLUME_DB = 3
+
 # select tts voice role, counld be "alloy, echo, fable, onyx, nova, and shimmer"
 # https://platform.openai.com/docs/guides/text-to-speech/supported-languages
 TTS_VOICE = 'echo'
@@ -69,7 +79,8 @@ try:
     my_car = Picarx()
     time.sleep(1)
 except Exception as e:
-    raise RuntimeError(e)
+    # Preservar la traça completa de l'excepció original
+    raise RuntimeError(f"Error inicialitzant Picarx: {e}") from e
 
 music = Music()
 
@@ -247,8 +258,10 @@ def person_detection_handler():
     
     while True:
         try:
-            # Comprovar si hi ha una persona detectada
-            if Vilib.detect_obj_parameter['human_n'] != 0:
+            # Comprovar si hi ha una persona detectada (validar que existeixi el paràmetre)
+            if (hasattr(Vilib, 'detect_obj_parameter') and 
+                isinstance(Vilib.detect_obj_parameter, dict) and
+                Vilib.detect_obj_parameter.get('human_n', 0) != 0):
                 # Persona detectada
                 with person_detection_lock:
                     current_time = time.time()
@@ -387,13 +400,31 @@ def main():
         if with_img:
             img_path = os.path.join(current_path, 'img_imput.jpg')
             try:
+                # Validar que Vilib.img existeixi i sigui vàlid abans d'escriure
+                if not hasattr(Vilib, 'img') or Vilib.img is None:
+                    raise ValueError("Vilib.img no està disponible")
                 cv2.imwrite(img_path, Vilib.img)
-            except Exception as e:
+            except (cv2.error, ValueError, AttributeError) as e:
                 print(f'Warning: Could not write image file: {e}')
                 # Try alternative location
-                img_path = os.path.join(tempfile.gettempdir(), 'img_imput.jpg')
-                cv2.imwrite(img_path, Vilib.img)
-            response = openai_helper.dialogue_with_img(_result, img_path)
+                try:
+                    img_path = os.path.join(tempfile.gettempdir(), 'img_imput.jpg')
+                    if hasattr(Vilib, 'img') and Vilib.img is not None:
+                        cv2.imwrite(img_path, Vilib.img)
+                    else:
+                        print('Warning: Vilib.img no disponible, continuant sense imatge')
+                        img_path = None
+                except Exception as e2:
+                    print(f'Warning: Could not write image to temp directory: {e2}')
+                    img_path = None
+            
+            # Només usar imatge si s'ha pogut crear correctament
+            if img_path:
+                response = openai_helper.dialogue_with_img(_result, img_path)
+            else:
+                # Fallback a diàleg sense imatge si no es pot obtenir la imatge
+                print('Warning: Continuant sense imatge degut a errors previs')
+                response = openai_helper.dialogue(_result)
         else:
             response = openai_helper.dialogue(_result)
 
@@ -427,7 +458,9 @@ def main():
                     actions = []
                     answer = response
 
-        except:
+        except Exception as e:
+            # Capturar excepcions específiques en lloc de genèriques
+            print(f'Warning: Error processant resposta de GPT: {e}')
             actions = []
             answer = ''
     

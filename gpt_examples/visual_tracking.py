@@ -84,7 +84,18 @@ def calcular_canvi_angle(coordenada, dimensio_camera, invertir=False):
     
     Returns:
         Canvi d'angle desitjat en graus
+    
+    Raises:
+        ValueError: Si dimensio_camera és zero o negativa
     """
+    # Validar que dimensio_camera sigui vàlida per evitar divisió per zero
+    if not isinstance(dimensio_camera, (int, float)) or dimensio_camera <= 0:
+        raise ValueError(f"dimensio_camera ha de ser un número positiu, rebut: {dimensio_camera}")
+    
+    # Validar que coordenada sigui un número
+    if not isinstance(coordenada, (int, float)):
+        raise ValueError(f"coordenada ha de ser un número, rebut: {coordenada}")
+    
     canvi = (coordenada * 10 / dimensio_camera) - 5
     return -canvi if invertir else canvi
 
@@ -130,7 +141,27 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
         - state_dict: Diccionari amb l'estat (centered: bool)
         - lock: Lock per accedir a l'estat de forma thread-safe
         - is_person_centered_func: Funció per consultar si la persona està centrada
+    
+    Raises:
+        ValueError: Si els paràmetres no són vàlids
     """
+    
+    # Validar paràmetres d'entrada
+    if car is None:
+        raise ValueError("car no pot ser None")
+    
+    if not isinstance(with_img, bool):
+        raise ValueError("with_img ha de ser un boolean")
+    
+    if not isinstance(default_head_tilt, (int, float)):
+        raise ValueError("default_head_tilt ha de ser un número")
+    
+    # Validar que default_head_tilt estigui dins del rang permès
+    default_head_tilt = clamp_number(
+        default_head_tilt,
+        CAMERA_TILT_MIN_ANGLE,
+        CAMERA_TILT_MAX_ANGLE
+    )
     
     # Estat compartit
     state = {'centered': False}
@@ -169,9 +200,18 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
                 num_persones = vilib.detect_obj_parameter.get('human_n', 0)
                 
                 if num_persones != 0:
-                    # Obtenir coordenades de la persona detectada
-                    coordenada_x = vilib.detect_obj_parameter['human_x']
-                    coordenada_y = vilib.detect_obj_parameter['human_y']
+                    # Obtenir coordenades de la persona detectada amb validació
+                    if not hasattr(vilib, 'detect_obj_parameter') or not isinstance(vilib.detect_obj_parameter, dict):
+                        # Si no hi ha paràmetres vàlids, continuar sense processar
+                        time.sleep(TRACKING_LOOP_DELAY)
+                        continue
+                    
+                    coordenada_x = vilib.detect_obj_parameter.get('human_x', CAMERA_CENTER_X)
+                    coordenada_y = vilib.detect_obj_parameter.get('human_y', CAMERA_CENTER_Y)
+                    
+                    # Validar que les coordenades siguin vàlides (dins del rang de la càmera)
+                    coordenada_x = clamp_number(coordenada_x, 0, CAMERA_WIDTH)
+                    coordenada_y = clamp_number(coordenada_y, 0, CAMERA_HEIGHT)
                     
                     # Afegir a l'històric de deteccions
                     detection_history['x'].append(coordenada_x)
@@ -232,9 +272,15 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
                         CAMERA_TILT_MAX_ANGLE
                     )
                     
-                    # Aplicar els nous angles a la càmera
-                    car.set_cam_pan_angle(pan_angle)
-                    car.set_cam_tilt_angle(tilt_angle)
+                    # Aplicar els nous angles a la càmera amb validació
+                    try:
+                        if hasattr(car, 'set_cam_pan_angle'):
+                            car.set_cam_pan_angle(pan_angle)
+                        if hasattr(car, 'set_cam_tilt_angle'):
+                            car.set_cam_tilt_angle(tilt_angle)
+                    except (AttributeError, Exception) as e:
+                        # Si hi ha un error amb la càmera, registrar però continuar
+                        print(f'[Visual Tracking] Error actualitzant angles de càmera: {e}')
                 else:
                     # Si no hi ha detecció, buidar l'històric i actualitzar estat
                     detection_history['x'].clear()
