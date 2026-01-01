@@ -327,8 +327,11 @@ def main():
 
     while True:
         if input_mode == 'voice':
-            my_car.set_cam_pan_angle(DEFAULT_HEAD_PAN)
-            my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
+            # No resetar càmera si el seguiment visual està actiu
+            # El seguiment visual controla els angles de la càmera contínuament
+            if not with_img:
+                my_car.set_cam_pan_angle(DEFAULT_HEAD_PAN)
+                my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
 
             # listen
             # ----------------------------------------------------------------
@@ -356,7 +359,10 @@ def main():
                 continue
 
         elif input_mode == 'keyboard':
-            my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
+            # No resetar càmera si el seguiment visual està actiu
+            # El seguiment visual controla els angles de la càmera contínuament
+            if not with_img:
+                my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
 
             with action_lock:
                 action_status = 'standby'
