@@ -8,20 +8,22 @@ Aquest directori conté els tests unitaris per al projecte picar-x-mnebot.
 
 ```bash
 # Instal·lar dependències de test
-pip install pytest pytest-cov
+python3 -m pip install pytest pytest-cov
 
-# Executar tots els tests
-pytest
+# Executar tots els tests (des del directori gpt_examples)
+python3 -m pytest tests/ -v
 
 # Executar amb cobertura
-pytest --cov=. --cov-report=html
+python3 -m pytest tests/ --cov=. --cov-report=html
 
 # Executar un fitxer específic
-pytest tests/test_openai_helper.py
+python3 -m pytest tests/test_openai_helper.py -v
 
 # Executar amb verbositat
-pytest -v
+python3 -m pytest tests/ -v
 ```
+
+**Nota**: A Windows, si `pytest` no està al PATH, cal usar `python3 -m pytest` en lloc de només `pytest`.
 
 ### Amb unittest (estàndard)
 
@@ -38,6 +40,7 @@ python -m unittest tests.test_openai_helper
 - `test_openai_helper.py`: Tests per a `openai_helper.py`
 - `test_utils.py`: Tests per a `utils.py`
 - `test_visual_tracking.py`: Tests per a `visual_tracking.py`
+- `test_gpt_car.py`: Tests per a `gpt_car.py`
 
 ## Cobertura
 
@@ -45,7 +48,7 @@ L'objectiu és assolir una cobertura mínima del 70% segons el pla de millores.
 
 Per veure la cobertura:
 ```bash
-pytest --cov=. --cov-report=html
+python3 -m pytest tests/ --cov=. --cov-report=html
 # Obrir htmlcov/index.html al navegador
 ```
 
