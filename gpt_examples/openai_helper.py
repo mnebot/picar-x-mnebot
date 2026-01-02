@@ -87,7 +87,7 @@ class OpenAiHelper():
                             try:
                                 value = json.loads(value)  # Convertir JSON string a dict de forma segura
                                 return value
-                            except (json.JSONDecodeError, ValueError):
+                            except (TypeError, ValueError):
                                 return str(value)
                 break # only last reply
         else:
@@ -140,7 +140,7 @@ class OpenAiHelper():
                             try:
                                 value = json.loads(value)  # Convertir JSON string a dict de forma segura
                                 return value
-                            except (json.JSONDecodeError, ValueError):
+                            except (TypeError, ValueError):
                                 return str(value)
                 break # only last reply
         else:
