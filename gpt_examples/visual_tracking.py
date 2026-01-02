@@ -100,6 +100,158 @@ def calcular_canvi_angle(coordenada, dimensio_camera, invertir=False):
     return -canvi if invertir else canvi
 
 
+def processar_deteccio_persona(vilib, detection_history, state, state_lock):
+    """
+    Processa una detecció de persona i actualitza l'estat.
+    
+    Args:
+        vilib: Mòdul Vilib amb deteccions
+        detection_history: Diccionari amb històric de deteccions {'x': [], 'y': []}
+        state: Diccionari amb l'estat compartit
+        state_lock: Lock per accedir a l'estat de forma thread-safe
+    
+    Returns:
+        Tupla (posicio_suavitzada_x, posicio_suavitzada_y, esta_centrada) o None si no hi ha detecció vàlida
+    """
+    # Comprovar si hi ha una persona detectada
+    if not hasattr(vilib, 'detect_obj_parameter') or not isinstance(vilib.detect_obj_parameter, dict):
+        return None
+    
+    num_persones = vilib.detect_obj_parameter.get('human_n', 0)
+    if num_persones == 0:
+        return None
+    
+    # Obtenir coordenades de la persona detectada
+    coordenada_x = vilib.detect_obj_parameter.get('human_x', CAMERA_CENTER_X)
+    coordenada_y = vilib.detect_obj_parameter.get('human_y', CAMERA_CENTER_Y)
+    
+    # Validar que les coordenades siguin vàlides (dins del rang de la càmera)
+    coordenada_x = clamp_number(coordenada_x, 0, CAMERA_WIDTH)
+    coordenada_y = clamp_number(coordenada_y, 0, CAMERA_HEIGHT)
+    
+    # Afegir a l'històric de deteccions
+    detection_history['x'].append(coordenada_x)
+    detection_history['y'].append(coordenada_y)
+    
+    # Mantenir només últimes N deteccions
+    if len(detection_history['x']) > DETECTION_HISTORY_SIZE:
+        detection_history['x'].pop(0)
+        detection_history['y'].pop(0)
+    
+    # Calcular posició suavitzada mitjançant mitjana ponderada
+    posicio_suavitzada_x = calcular_mitjana_ponderada(
+        detection_history['x'],
+        SMOOTHING_WEIGHTS
+    )
+    posicio_suavitzada_y = calcular_mitjana_ponderada(
+        detection_history['y'],
+        SMOOTHING_WEIGHTS
+    )
+    
+    # Calcular desplaçament respecte al centre de la imatge
+    desplacament_x = posicio_suavitzada_x - CAMERA_CENTER_X
+    desplacament_y = posicio_suavitzada_y - CAMERA_CENTER_Y
+    
+    # Detectar si la persona està centrada dins de la zona de tolerància
+    esta_centrada = (
+        abs(desplacament_x) < CENTER_ZONE_TOLERANCE and
+        abs(desplacament_y) < CENTER_ZONE_TOLERANCE
+    )
+    
+    # Actualitzar estat global de forma thread-safe
+    with state_lock:
+        state['centered'] = esta_centrada
+    
+    return (posicio_suavitzada_x, posicio_suavitzada_y, esta_centrada)
+
+
+def aplicar_angles_camera(car, pan_angle, tilt_angle):
+    """
+    Aplica els angles de pan i tilt a la càmera amb validació.
+    
+    Args:
+        car: Instància de Picarx
+        pan_angle: Angle de pan
+        tilt_angle: Angle de tilt
+    
+    Returns:
+        True si s'han aplicat correctament, False si hi ha hagut un error
+    """
+    try:
+        if hasattr(car, 'set_cam_pan_angle'):
+            car.set_cam_pan_angle(pan_angle)
+        if hasattr(car, 'set_cam_tilt_angle'):
+            car.set_cam_tilt_angle(tilt_angle)
+        return True
+    except (AttributeError, Exception) as e:
+        # Si hi ha un error amb la càmera, registrar però continuar
+        print(f'[Visual Tracking] Error actualitzant angles de càmera: {e}')
+        return False
+
+
+def processar_iteracio_tracking(vilib, detection_history, state, state_lock, 
+                                 car, pan_angle, tilt_angle):
+    """
+    Processa una iteració del loop de seguiment visual.
+    
+    Args:
+        vilib: Mòdul Vilib amb deteccions
+        detection_history: Diccionari amb històric de deteccions
+        state: Diccionari amb l'estat compartit
+        state_lock: Lock per accedir a l'estat
+        car: Instància de Picarx
+        pan_angle: Angle actual de pan
+        tilt_angle: Angle actual de tilt
+    
+    Returns:
+        Tupla (nou_pan_angle, nou_tilt_angle) amb els nous angles
+    """
+    # Processar detecció de persona
+    resultat = processar_deteccio_persona(vilib, detection_history, state, state_lock)
+    
+    if resultat is not None:
+        posicio_suavitzada_x, posicio_suavitzada_y, _ = resultat
+        
+        # Calcular canvis d'angle desitjats per centrar la persona
+        canvi_pan_desitjat = calcular_canvi_angle(
+            posicio_suavitzada_x,
+            CAMERA_WIDTH,
+            invertir=False
+        )
+        canvi_tilt_desitjat = calcular_canvi_angle(
+            posicio_suavitzada_y,
+            CAMERA_HEIGHT,
+            invertir=True
+        )
+        
+        # Actualitzar angles de la càmera amb limitació de velocitat
+        nou_pan_angle = actualitzar_angle_camera(
+            pan_angle,
+            canvi_pan_desitjat,
+            CAMERA_PAN_MIN_ANGLE,
+            CAMERA_PAN_MAX_ANGLE
+        )
+        nou_tilt_angle = actualitzar_angle_camera(
+            tilt_angle,
+            canvi_tilt_desitjat,
+            CAMERA_TILT_MIN_ANGLE,
+            CAMERA_TILT_MAX_ANGLE
+        )
+        
+        # Aplicar els nous angles a la càmera amb validació
+        aplicar_angles_camera(car, nou_pan_angle, nou_tilt_angle)
+        
+        return (nou_pan_angle, nou_tilt_angle)
+    else:
+        # Si no hi ha detecció, buidar l'històric i actualitzar estat
+        detection_history['x'].clear()
+        detection_history['y'].clear()
+        with state_lock:
+            state['centered'] = False
+        
+        return (pan_angle, tilt_angle)
+
+
 def actualitzar_angle_camera(angle_actual, canvi_desitjat, angle_min, angle_max):
     """
     Actualitza l'angle de la càmera aplicant un canvi limitat.
@@ -196,98 +348,10 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
         
         while True:
             try:
-                # Comprovar si hi ha una persona detectada
-                num_persones = vilib.detect_obj_parameter.get('human_n', 0)
-                
-                if num_persones != 0:
-                    # Obtenir coordenades de la persona detectada amb validació
-                    if not hasattr(vilib, 'detect_obj_parameter') or not isinstance(vilib.detect_obj_parameter, dict):
-                        # Si no hi ha paràmetres vàlids, continuar sense processar
-                        time.sleep(TRACKING_LOOP_DELAY)
-                        continue
-                    
-                    coordenada_x = vilib.detect_obj_parameter.get('human_x', CAMERA_CENTER_X)
-                    coordenada_y = vilib.detect_obj_parameter.get('human_y', CAMERA_CENTER_Y)
-                    
-                    # Validar que les coordenades siguin vàlides (dins del rang de la càmera)
-                    coordenada_x = clamp_number(coordenada_x, 0, CAMERA_WIDTH)
-                    coordenada_y = clamp_number(coordenada_y, 0, CAMERA_HEIGHT)
-                    
-                    # Afegir a l'històric de deteccions
-                    detection_history['x'].append(coordenada_x)
-                    detection_history['y'].append(coordenada_y)
-                    
-                    # Mantenir només últimes N deteccions
-                    if len(detection_history['x']) > DETECTION_HISTORY_SIZE:
-                        detection_history['x'].pop(0)
-                        detection_history['y'].pop(0)
-                    
-                    # Calcular posició suavitzada mitjançant mitjana ponderada
-                    posicio_suavitzada_x = calcular_mitjana_ponderada(
-                        detection_history['x'],
-                        SMOOTHING_WEIGHTS
-                    )
-                    posicio_suavitzada_y = calcular_mitjana_ponderada(
-                        detection_history['y'],
-                        SMOOTHING_WEIGHTS
-                    )
-                    
-                    # Calcular desplaçament respecte al centre de la imatge
-                    desplacament_x = posicio_suavitzada_x - CAMERA_CENTER_X
-                    desplacament_y = posicio_suavitzada_y - CAMERA_CENTER_Y
-                    
-                    # Detectar si la persona està centrada dins de la zona de tolerància
-                    esta_centrada = (
-                        abs(desplacament_x) < CENTER_ZONE_TOLERANCE and
-                        abs(desplacament_y) < CENTER_ZONE_TOLERANCE
-                    )
-                    
-                    # Actualitzar estat global de forma thread-safe
-                    with state_lock:
-                        state['centered'] = esta_centrada
-                    
-                    # Calcular canvis d'angle desitjats per centrar la persona
-                    canvi_pan_desitjat = calcular_canvi_angle(
-                        posicio_suavitzada_x,
-                        CAMERA_WIDTH,
-                        invertir=False
-                    )
-                    canvi_tilt_desitjat = calcular_canvi_angle(
-                        posicio_suavitzada_y,
-                        CAMERA_HEIGHT,
-                        invertir=True
-                    )
-                    
-                    # Actualitzar angles de la càmera amb limitació de velocitat
-                    pan_angle = actualitzar_angle_camera(
-                        pan_angle,
-                        canvi_pan_desitjat,
-                        CAMERA_PAN_MIN_ANGLE,
-                        CAMERA_PAN_MAX_ANGLE
-                    )
-                    tilt_angle = actualitzar_angle_camera(
-                        tilt_angle,
-                        canvi_tilt_desitjat,
-                        CAMERA_TILT_MIN_ANGLE,
-                        CAMERA_TILT_MAX_ANGLE
-                    )
-                    
-                    # Aplicar els nous angles a la càmera amb validació
-                    try:
-                        if hasattr(car, 'set_cam_pan_angle'):
-                            car.set_cam_pan_angle(pan_angle)
-                        if hasattr(car, 'set_cam_tilt_angle'):
-                            car.set_cam_tilt_angle(tilt_angle)
-                    except (AttributeError, Exception) as e:
-                        # Si hi ha un error amb la càmera, registrar però continuar
-                        print(f'[Visual Tracking] Error actualitzant angles de càmera: {e}')
-                else:
-                    # Si no hi ha detecció, buidar l'històric i actualitzar estat
-                    detection_history['x'].clear()
-                    detection_history['y'].clear()
-                    with state_lock:
-                        state['centered'] = False
-                
+                pan_angle, tilt_angle = processar_iteracio_tracking(
+                    vilib, detection_history, state, state_lock,
+                    car, pan_angle, tilt_angle
+                )
                 time.sleep(TRACKING_LOOP_DELAY)
                 
             except Exception as e:

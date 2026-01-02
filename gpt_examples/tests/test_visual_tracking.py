@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import Mock, patch
 import sys
 import os
+import threading
 
 # Afegir el directori pare al path per poder importar els mòduls
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -14,7 +15,10 @@ from visual_tracking import (
     calcular_mitjana_ponderada,
     calcular_canvi_angle,
     actualitzar_angle_camera,
-    create_visual_tracking_handler
+    create_visual_tracking_handler,
+    processar_deteccio_persona,
+    aplicar_angles_camera,
+    processar_iteracio_tracking
 )
 
 
@@ -385,6 +389,319 @@ class TestVisualTrackingHandler(unittest.TestCase):
         
         # El handler hauria de gestionar excepcions
         self.assertIsNotNone(handler)
+
+
+class TestProcessarDeteccioPersona(unittest.TestCase):
+    """Tests per a processar_deteccio_persona"""
+    
+    def setUp(self):
+        """Configuració inicial per a cada test"""
+        self.mock_vilib = Mock()
+        self.detection_history = {'x': [], 'y': []}
+        self.state = {'centered': False}
+        self.state_lock = threading.Lock()
+    
+    def test_processar_deteccio_persona_amb_deteccio(self):
+        """Test de processar_deteccio_persona amb detecció vàlida"""
+        from visual_tracking import processar_deteccio_persona
+        
+        self.mock_vilib.detect_obj_parameter = {
+            'human_n': 1,
+            'human_x': 320,
+            'human_y': 240
+        }
+        
+        resultat = processar_deteccio_persona(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock
+        )
+        
+        self.assertIsNotNone(resultat)
+        pos_x, pos_y, esta_centrada = resultat
+        self.assertIsInstance(pos_x, (int, float))
+        self.assertIsInstance(pos_y, (int, float))
+        self.assertIsInstance(esta_centrada, bool)
+        self.assertEqual(len(self.detection_history['x']), 1)
+        self.assertEqual(len(self.detection_history['y']), 1)
+    
+    def test_processar_deteccio_persona_sense_deteccio(self):
+        """Test de processar_deteccio_persona sense detecció"""
+        from visual_tracking import processar_deteccio_persona
+        
+        self.mock_vilib.detect_obj_parameter = {'human_n': 0}
+        
+        resultat = processar_deteccio_persona(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock
+        )
+        
+        self.assertIsNone(resultat)
+    
+    def test_processar_deteccio_persona_invalid_parameter(self):
+        """Test de processar_deteccio_persona amb paràmetre invàlid"""
+        from visual_tracking import processar_deteccio_persona
+        
+        self.mock_vilib.detect_obj_parameter = None
+        
+        resultat = processar_deteccio_persona(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock
+        )
+        
+        self.assertIsNone(resultat)
+    
+    def test_processar_deteccio_persona_coordenades_fora_rang(self):
+        """Test de processar_deteccio_persona amb coordenades fora del rang"""
+        from visual_tracking import processar_deteccio_persona, CAMERA_WIDTH, CAMERA_HEIGHT
+        
+        self.mock_vilib.detect_obj_parameter = {
+            'human_n': 1,
+            'human_x': CAMERA_WIDTH + 100,  # Fora del rang
+            'human_y': -50  # Fora del rang
+        }
+        
+        resultat = processar_deteccio_persona(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock
+        )
+        
+        self.assertIsNotNone(resultat)
+        pos_x, pos_y, _ = resultat
+        # Les coordenades haurien d'estar dins del rang
+        self.assertLessEqual(pos_x, CAMERA_WIDTH)
+        self.assertGreaterEqual(pos_x, 0)
+        self.assertLessEqual(pos_y, CAMERA_HEIGHT)
+        self.assertGreaterEqual(pos_y, 0)
+    
+    def test_processar_deteccio_persona_historial_limit(self):
+        """Test de processar_deteccio_persona mantenint límit de l'historial"""
+        from visual_tracking import processar_deteccio_persona, DETECTION_HISTORY_SIZE
+        
+        self.mock_vilib.detect_obj_parameter = {
+            'human_n': 1,
+            'human_x': 320,
+            'human_y': 240
+        }
+        
+        # Omplir l'historial fins al límit
+        for i in range(DETECTION_HISTORY_SIZE + 5):
+            resultat = processar_deteccio_persona(
+                self.mock_vilib, self.detection_history, self.state, self.state_lock
+            )
+            self.assertIsNotNone(resultat)
+        
+        # L'historial hauria de tenir només DETECTION_HISTORY_SIZE elements
+        self.assertEqual(len(self.detection_history['x']), DETECTION_HISTORY_SIZE)
+        self.assertEqual(len(self.detection_history['y']), DETECTION_HISTORY_SIZE)
+
+
+class TestAplicarAnglesCamera(unittest.TestCase):
+    """Tests per a aplicar_angles_camera"""
+    
+    def test_aplicar_angles_camera_ok(self):
+        """Test d'aplicar angles de càmera correctament"""
+        from visual_tracking import aplicar_angles_camera
+        
+        mock_car = Mock()
+        mock_car.set_cam_pan_angle = Mock()
+        mock_car.set_cam_tilt_angle = Mock()
+        
+        resultat = aplicar_angles_camera(mock_car, 10, 20)
+        
+        self.assertTrue(resultat)
+        mock_car.set_cam_pan_angle.assert_called_once_with(10)
+        mock_car.set_cam_tilt_angle.assert_called_once_with(20)
+    
+    def test_aplicar_angles_camera_sense_metodes(self):
+        """Test d'aplicar angles quan el car no té els mètodes"""
+        from visual_tracking import aplicar_angles_camera
+        
+        mock_car = Mock()
+        # No definir set_cam_pan_angle ni set_cam_tilt_angle
+        
+        resultat = aplicar_angles_camera(mock_car, 10, 20)
+        
+        # Hauria de retornar True encara que no hi hagi mètodes
+        self.assertTrue(resultat)
+    
+    def test_aplicar_angles_camera_error(self):
+        """Test d'aplicar angles quan hi ha un error"""
+        from visual_tracking import aplicar_angles_camera
+        
+        mock_car = Mock()
+        mock_car.set_cam_pan_angle = Mock(side_effect=AttributeError("Error"))
+        mock_car.set_cam_tilt_angle = Mock()
+        
+        resultat = aplicar_angles_camera(mock_car, 10, 20)
+        
+        self.assertFalse(resultat)
+
+
+class TestVisualTrackingHandlerLoop(unittest.TestCase):
+    """Tests per a parts del loop del visual_tracking_handler"""
+    
+    @patch('visual_tracking.time.sleep')
+    def test_handler_loop_initialization(self, mock_sleep):
+        """Test de la inicialització del loop del handler"""
+        mock_car = Mock()
+        mock_vilib = Mock()
+        mock_vilib.detect_obj_parameter = {'human_n': 0}
+        
+        handler, state, lock, is_centered_func = create_visual_tracking_handler(
+            mock_car, mock_vilib, True, 20
+        )
+        
+        # Verificar que el handler existeix
+        self.assertIsNotNone(handler)
+        
+        # Verificar inicialització
+        self.assertFalse(state['centered'])
+    
+    @patch('visual_tracking.time.sleep')
+    @patch('visual_tracking.processar_deteccio_persona')
+    @patch('visual_tracking.calcular_canvi_angle')
+    @patch('visual_tracking.actualitzar_angle_camera')
+    @patch('visual_tracking.aplicar_angles_camera')
+    def test_handler_loop_with_detection(self, mock_aplicar, mock_actualitzar, 
+                                         mock_canvi, mock_processar, mock_sleep):
+        """Test del loop del handler amb detecció"""
+        mock_car = Mock()
+        mock_vilib = Mock()
+        mock_vilib.detect_obj_parameter = {'human_n': 1}
+        
+        # Mock de processar_deteccio_persona per retornar resultat
+        mock_processar.return_value = (320, 240, True)
+        mock_canvi.return_value = 5
+        mock_actualitzar.return_value = 5
+        mock_aplicar.return_value = True
+        
+        handler, state, lock, is_centered_func = create_visual_tracking_handler(
+            mock_car, mock_vilib, True, 20
+        )
+        
+        # El handler existeix però no podem executar-lo completament
+        # Però podem verificar que les funcions es criden correctament
+        # quan s'executa el handler en un thread real
+        self.assertIsNotNone(handler)
+    
+    @patch('visual_tracking.time.sleep')
+    @patch('visual_tracking.processar_deteccio_persona')
+    def test_handler_loop_no_detection(self, mock_processar, mock_sleep):
+        """Test del loop del handler sense detecció"""
+        mock_car = Mock()
+        mock_vilib = Mock()
+        mock_vilib.detect_obj_parameter = {'human_n': 0}
+        
+        # Mock de processar_deteccio_persona per retornar None
+        mock_processar.return_value = None
+        
+        handler, state, lock, is_centered_func = create_visual_tracking_handler(
+            mock_car, mock_vilib, True, 20
+        )
+        
+        # Verificar que el handler existeix
+        self.assertIsNotNone(handler)
+    
+    @patch('visual_tracking.time.sleep')
+    def test_handler_loop_exception_handling(self, mock_sleep):
+        """Test del maneig d'excepcions al loop del handler"""
+        mock_car = Mock()
+        mock_vilib = Mock()
+        mock_vilib.detect_obj_parameter = Mock(side_effect=Exception("Error"))
+        
+        handler, state, lock, is_centered_func = create_visual_tracking_handler(
+            mock_car, mock_vilib, True, 20
+        )
+        
+        # El handler hauria de gestionar excepcions
+        self.assertIsNotNone(handler)
+    
+    @patch('visual_tracking.time.sleep')
+    def test_handler_vilib_init_delay(self, mock_sleep):
+        """Test que el handler espera el delay d'inicialització de Vilib"""
+        mock_car = Mock()
+        mock_vilib = Mock()
+        mock_vilib.detect_obj_parameter = {'human_n': 0}
+        
+        handler, state, lock, is_centered_func = create_visual_tracking_handler(
+            mock_car, mock_vilib, True, 20
+        )
+        
+        # El handler existeix
+        self.assertIsNotNone(handler)
+        
+        # Quan s'executi el handler, hauria de cridar time.sleep amb VILIB_INIT_DELAY
+        # Però no podem executar-lo completament, només verificar que existeix
+
+
+class TestProcessarIteracioTracking(unittest.TestCase):
+    """Tests per a processar_iteracio_tracking"""
+    
+    def setUp(self):
+        """Configuració inicial per a cada test"""
+        self.mock_vilib = Mock()
+        self.detection_history = {'x': [], 'y': []}
+        self.state = {'centered': False}
+        self.state_lock = threading.Lock()
+        self.mock_car = Mock()
+        self.mock_car.set_cam_pan_angle = Mock()
+        self.mock_car.set_cam_tilt_angle = Mock()
+    
+    @patch('visual_tracking.aplicar_angles_camera')
+    @patch('visual_tracking.actualitzar_angle_camera')
+    @patch('visual_tracking.calcular_canvi_angle')
+    @patch('visual_tracking.processar_deteccio_persona')
+    def test_processar_iteracio_amb_deteccio(self, mock_processar, mock_canvi, 
+                                            mock_actualitzar, mock_aplicar):
+        """Test de processar_iteracio_tracking amb detecció"""
+        mock_processar.return_value = (320, 240, True)
+        mock_canvi.return_value = 5
+        mock_actualitzar.return_value = 10
+        
+        pan_angle, tilt_angle = processar_iteracio_tracking(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock,
+            self.mock_car, 0, 20
+        )
+        
+        self.assertEqual(pan_angle, 10)
+        self.assertEqual(tilt_angle, 10)
+        mock_processar.assert_called_once()
+        mock_aplicar.assert_called_once()
+    
+    @patch('visual_tracking.processar_deteccio_persona')
+    def test_processar_iteracio_sense_deteccio(self, mock_processar):
+        """Test de processar_iteracio_tracking sense detecció"""
+        mock_processar.return_value = None
+        
+        pan_angle, tilt_angle = processar_iteracio_tracking(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock,
+            self.mock_car, 5, 15
+        )
+        
+        # Els angles haurien de romandre iguals
+        self.assertEqual(pan_angle, 5)
+        self.assertEqual(tilt_angle, 15)
+        # L'historial hauria d'estar buit
+        self.assertEqual(len(self.detection_history['x']), 0)
+        self.assertEqual(len(self.detection_history['y']), 0)
+        # L'estat hauria de ser False
+        self.assertFalse(self.state['centered'])
+    
+    @patch('visual_tracking.aplicar_angles_camera')
+    @patch('visual_tracking.actualitzar_angle_camera')
+    @patch('visual_tracking.calcular_canvi_angle')
+    @patch('visual_tracking.processar_deteccio_persona')
+    def test_processar_iteracio_angles_actualitzats(self, mock_processar, mock_canvi,
+                                                    mock_actualitzar, mock_aplicar):
+        """Test que els angles s'actualitzen correctament"""
+        mock_processar.return_value = (320, 240, False)
+        mock_canvi.side_effect = [3, -2]  # canvi_pan, canvi_tilt
+        mock_actualitzar.side_effect = [3, 18]  # nou_pan, nou_tilt
+        
+        pan_angle, tilt_angle = processar_iteracio_tracking(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock,
+            self.mock_car, 0, 20
+        )
+        
+        self.assertEqual(pan_angle, 3)
+        self.assertEqual(tilt_angle, 18)
+        mock_aplicar.assert_called_once_with(self.mock_car, 3, 18)
 
 
 if __name__ == '__main__':

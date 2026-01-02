@@ -71,21 +71,25 @@ class OpenAiHelper():
         except (TypeError, ValueError):
             return str(value)
 
+    def _extract_assistant_response(self, messages):
+        """Extreu la resposta de l'assistent dels missatges."""
+        for message in messages.data:
+            if message.role == 'assistant':
+                for block in message.content:
+                    if block.type == 'text':
+                        value = block.text.value
+                        chat_print(self.assistant_name, value)
+                        return self._parse_response_value(value)
+            break  # only last reply
+        return None
+
     def _process_run_response(self, run):
         """Processa el run i retorna la resposta de l'assistent o None."""
         if run.status == 'completed': 
             messages = self.client.beta.threads.messages.list(
                 thread_id=self.thread.id
             )
-
-            for message in messages.data:
-                if message.role == 'assistant':
-                    for block in message.content:
-                        if block.type == 'text':
-                            value = block.text.value
-                            chat_print(self.assistant_name, value)
-                            return self._parse_response_value(value)
-                break  # only last reply
+            return self._extract_assistant_response(messages)
         else:
             print(f"Run status: {run.status}")
             return None
@@ -93,7 +97,7 @@ class OpenAiHelper():
     def dialogue(self, msg):
         chat_print("user", msg)
         msg_with_lang = self._prepare_message_with_language(msg)
-        message = self.client.beta.threads.messages.create(
+        self.client.beta.threads.messages.create(
             thread_id=self.thread.id,
             role="user",
             content=msg_with_lang
@@ -117,7 +121,7 @@ class OpenAiHelper():
 
         msg_with_lang = self._prepare_message_with_language(msg)
 
-        message = self.client.beta.threads.messages.create(
+        self.client.beta.threads.messages.create(
             thread_id=self.thread.id,
             role="user",
             content=[
