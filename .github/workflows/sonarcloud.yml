@@ -55,6 +55,5 @@ jobs:
           # està al fitxer sonar-project.properties a l'arrel del repositori.
           # SonarCloud llegeix automàticament aquest fitxer.
           # Només s'analitza la carpeta gpt_examples amb exclusiones per fitxers no rellevants.
-          args: []
           # When you need the analysis to take place in a directory other than the one from which it was launched, default is .
           projectBaseDir: .
