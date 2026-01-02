@@ -62,22 +62,7 @@ jobs:
       - name: Run tests with coverage
         working-directory: ./gpt_examples
         run: |
-          pytest --cov=. --cov-report=xml --cov-report=term || true
-      
-      - name: Fix coverage.xml paths for SonarCloud
-        working-directory: .
-        run: |
-          # Convertir rutes absolutes a relatives al coverage.xml
-          # SonarCloud necessita rutes relatives que coincideixin amb sonar.sources (gpt_examples)
-          if [ -f gpt_examples/coverage.xml ]; then
-            # Reemplaçar rutes absolutes per rutes relatives des de l'arrel del projecte
-            # Les rutes han de ser relatives a l'arrel, però amb prefix gpt_examples/
-            sed -i 's|/home/runner/work/picar-x-mnebot/picar-x-mnebot/gpt_examples/|gpt_examples/|g' gpt_examples/coverage.xml
-            sed -i 's|/github/workspace/gpt_examples/|gpt_examples/|g' gpt_examples/coverage.xml
-            # Corregir el tag source perquè apunti a gpt_examples
-            sed -i 's|<source>/.*gpt_examples</source>|<source>gpt_examples</source>|g' gpt_examples/coverage.xml
-            sed -i 's|<source>/github/workspace</source>|<source>gpt_examples</source>|g' gpt_examples/coverage.xml
-          fi
+          pytest --cov=. --cov-report=xml --cov-report=xml:gpt_examples/coverage.xml
       
       - name: Analyze with SonarCloud
 
