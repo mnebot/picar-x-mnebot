@@ -366,7 +366,7 @@ def main():
             _result = openai_helper.stt(audio, language=LANGUAGE)
             gray_print(f"stt takes: {time.time() - st:.3f} s")
 
-            if _result == False or _result == "":
+            if not _result or _result == "":
                 print() # new line
                 continue
 
@@ -379,9 +379,9 @@ def main():
             with action_lock:
                 action_status = 'standby'
 
-            _result = input(f'\033[1;30m{"intput: "}\033[0m').encode(sys.stdin.encoding).decode('utf-8')
+            _result = input(f'\033[1;30m{"input: "}\033[0m').encode(sys.stdin.encoding).decode('utf-8')
 
-            if _result == False or _result == "":
+            if not _result or _result == "":
                 print() # new line
                 continue
 
@@ -398,7 +398,7 @@ def main():
             action_status = 'think'
 
         if with_img:
-            img_path = os.path.join(current_path, 'img_imput.jpg')
+            img_path = os.path.join(current_path, 'img_input.jpg')
             try:
                 # Validar que Vilib.img existeixi i sigui vàlid abans d'escriure
                 if not hasattr(Vilib, 'img') or Vilib.img is None:
@@ -408,7 +408,7 @@ def main():
                 print(f'Warning: Could not write image file: {e}')
                 # Try alternative location
                 try:
-                    img_path = os.path.join(tempfile.gettempdir(), 'img_imput.jpg')
+                    img_path = os.path.join(tempfile.gettempdir(), 'img_input.jpg')
                     if hasattr(Vilib, 'img') and Vilib.img is not None:
                         cv2.imwrite(img_path, Vilib.img)
                     else:
@@ -446,7 +446,7 @@ def main():
                     answer = ''
 
                 if len(answer) > 0:
-                    _actions = list.copy(actions)
+                    _actions = actions.copy()
                     for _action in _actions:
                         if _action in SOUND_EFFECT_ACTIONS:
                             _sound_actions.append(_action)
