@@ -15,3 +15,7 @@ gpt_examples/tts/
 
 # Fitxers de configuració OpenAI
 gpt_examples/keys.py
+
+# Fitxers de SonarCloud
+sonarcloud_token.txt
+gpt_examples/analisi_sonarcloud_issues.md
