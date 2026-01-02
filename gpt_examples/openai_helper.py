@@ -60,19 +60,19 @@ class OpenAiHelper():
             print(f"Could not request results from Whisper API; {e}")
             return False
 
-    def dialogue(self, msg):
-        chat_print("user", msg)
-        # Prepend language instruction to ensure Catalan responses
-        msg_with_lang = f"Respon sempre en català. {msg}"
-        message = self.client.beta.threads.messages.create(
-            thread_id=self.thread.id,
-            role="user",
-            content=msg_with_lang
-            )
-        run = self.client.beta.threads.runs.create_and_poll(
-            thread_id=self.thread.id,
-            assistant_id=self.assistant_id,
-        )
+    def _prepare_message_with_language(self, msg):
+        """Prepara el missatge afegint la instrucció de llengua."""
+        return f"Respon sempre en català. {msg}"
+
+    def _parse_response_value(self, value):
+        """Intenta parsejar el valor com JSON, retorna string si falla."""
+        try:
+            return json.loads(value)  # Convertir JSON string a dict de forma segura
+        except (TypeError, ValueError):
+            return str(value)
+
+    def _process_run_response(self, run):
+        """Processa el run i retorna la resposta de l'assistent o None."""
         if run.status == 'completed': 
             messages = self.client.beta.threads.messages.list(
                 thread_id=self.thread.id
@@ -84,15 +84,25 @@ class OpenAiHelper():
                         if block.type == 'text':
                             value = block.text.value
                             chat_print(self.assistant_name, value)
-                            try:
-                                value = json.loads(value)  # Convertir JSON string a dict de forma segura
-                                return value
-                            except (TypeError, ValueError):
-                                return str(value)
-                break # only last reply
+                            return self._parse_response_value(value)
+                break  # only last reply
         else:
             print(f"Run status: {run.status}")
             return None
+
+    def dialogue(self, msg):
+        chat_print("user", msg)
+        msg_with_lang = self._prepare_message_with_language(msg)
+        message = self.client.beta.threads.messages.create(
+            thread_id=self.thread.id,
+            role="user",
+            content=msg_with_lang
+        )
+        run = self.client.beta.threads.runs.create_and_poll(
+            thread_id=self.thread.id,
+            assistant_id=self.assistant_id,
+        )
+        return self._process_run_response(run)
 
 
     def dialogue_with_img(self, msg, img_path):
@@ -105,13 +115,12 @@ class OpenAiHelper():
                         purpose="vision"
                     )
 
-        # Prepend language instruction to ensure Catalan responses
-        msg_with_lang = f"Respon sempre en català. {msg}"
+        msg_with_lang = self._prepare_message_with_language(msg)
 
-        message =  self.client.beta.threads.messages.create(
-            thread_id= self.thread.id,
+        message = self.client.beta.threads.messages.create(
+            thread_id=self.thread.id,
             role="user",
-            content= [
+            content=[
                 {
                     "type": "text",
                     "text": msg_with_lang
@@ -121,31 +130,12 @@ class OpenAiHelper():
                     "image_file": {"file_id": img_file.id}
                 }
             ],
-            )
+        )
         run = self.client.beta.threads.runs.create_and_poll(
             thread_id=self.thread.id,
             assistant_id=self.assistant_id,
         )
-        if run.status == 'completed': 
-            messages = self.client.beta.threads.messages.list(
-                thread_id=self.thread.id
-            )
-
-            for message in messages.data:
-                if message.role == 'assistant':
-                    for block in message.content:
-                        if block.type == 'text':
-                            value = block.text.value
-                            chat_print(self.assistant_name, value)
-                            try:
-                                value = json.loads(value)  # Convertir JSON string a dict de forma segura
-                                return value
-                            except (TypeError, ValueError):
-                                return str(value)
-                break # only last reply
-        else:
-            print(f"Run status: {run.status}")
-            return None
+        return self._process_run_response(run)
 
 
     def text_to_speech(self, text, output_file, voice='alloy', response_format="mp3", speed=1, instructions=''):
