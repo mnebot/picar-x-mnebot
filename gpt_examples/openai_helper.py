@@ -7,10 +7,6 @@ import json
 # utils
 # =================================================================
 def chat_print(label, message):
-    width = shutil.get_terminal_size().columns
-    msg_len = len(message)
-    line_len = width - 27
-
     # --- normal print ---
     print(f'{time.time():.3f} {label:>6} >>> {message}')
 
@@ -49,15 +45,6 @@ class OpenAiHelper():
                 prompt="aquesta és una conversa entre jo i un robot"
             )
 
-            # file = "./stt_output.wav"
-            # with wave.open(file, "wb") as wf:
-            #     wf.write(audio.get_wav_data())
-
-            # with open(file, 'rb') as f:
-            #     transcript = client.audio.transcriptions.create(
-            #         model="whisper-1", 
-            #         file=f
-            #     )
             return transcript.text
         except Exception as e:
             print(f"stt err:{e}")
@@ -65,22 +52,6 @@ class OpenAiHelper():
 
     def speech_recognition_stt(self, recognizer, audio):
         import speech_recognition as sr
-
-        # # recognize speech using Sphinx
-        # try:
-        #     print("Sphinx thinks you said: " + r.recognize_sphinx(audio, language="en-US"))
-        # except sr.UnknownValueError:
-        #     print("Sphinx could not understand audio")
-        # except sr.RequestError as e:
-        #     print("Sphinx error; {0}".format(e))
-
-        # recognize speech using whisper
-        # try:
-        #     print("Whisper thinks you said: " + r.recognize_whisper(audio, language="english"))
-        # except sr.UnknownValueError:
-        #     print("Whisper could not understand audio")
-        # except sr.RequestError as e:
-        #     print(f"Could not request results from Whisper; {e}")
 
         # recognize speech using Whisper API
         try:
@@ -116,20 +87,23 @@ class OpenAiHelper():
                             try:
                                 value = json.loads(value)  # Convertir JSON string a dict de forma segura
                                 return value
-                            except (json.JSONDecodeError, ValueError) as e:
+                            except (json.JSONDecodeError, ValueError):
                                 return str(value)
                 break # only last reply
         else:
-            print(run.status)
+            print(f"Run status: {run.status}")
+            return None
 
 
     def dialogue_with_img(self, msg, img_path):
         chat_print(f"user", msg)
 
-        img_file = self.client.files.create(
-                    file=open(img_path, "rb"),
-                    purpose="vision"
-                )
+        # Utilitzar context manager per assegurar que el fitxer es tanqui correctament
+        with open(img_path, "rb") as img_file_handle:
+            img_file = self.client.files.create(
+                        file=img_file_handle,
+                        purpose="vision"
+                    )
 
         # Prepend language instruction to ensure Catalan responses
         msg_with_lang = f"Respon sempre en català. {msg}"
@@ -142,10 +116,6 @@ class OpenAiHelper():
                     "type": "text",
                     "text": msg_with_lang
                 },
-                # {
-                # "type": "image_url",
-                # "image_url": {"url": "https://example.com/image.png"}
-                # },
                 {
                     "type": "image_file",
                     "image_file": {"file_id": img_file.id}
@@ -170,11 +140,12 @@ class OpenAiHelper():
                             try:
                                 value = json.loads(value)  # Convertir JSON string a dict de forma segura
                                 return value
-                            except (json.JSONDecodeError, ValueError) as e:
+                            except (json.JSONDecodeError, ValueError):
                                 return str(value)
                 break # only last reply
         else:
-            print(run.status)
+            print(f"Run status: {run.status}")
+            return None
 
 
     def text_to_speech(self, text, output_file, voice='alloy', response_format="mp3", speed=1, instructions=''):
