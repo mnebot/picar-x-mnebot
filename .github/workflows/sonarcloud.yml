@@ -62,7 +62,7 @@ jobs:
       - name: Run tests with coverage
         working-directory: ./gpt_examples
         run: |
-          pytest --cov=. --cov-report=xml --cov-report=xml:gpt_examples/coverage.xml
+          pytest --cov=. --cov-report=xml --cov-report=xml:coverage.xml
       
       - name: Analyze with SonarCloud
 
