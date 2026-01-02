@@ -1,7 +1,7 @@
 from openai_helper import OpenAiHelper
 from keys import OPENAI_API_KEY, OPENAI_ASSISTANT_ID
-from preset_actions import *
-from utils import *
+from preset_actions import actions_dict, sounds_dict
+from utils import gray_print, speak_block, sox_volume, redirect_error_2_null, cancel_redirect_error
 from visual_tracking import create_visual_tracking_handler
 
 import readline # optimize keyboard input, only need to import
