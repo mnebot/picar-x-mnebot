@@ -43,6 +43,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # <--- AIXÒ ÉS EL MÉS IMPORTANT
+        with:
+          fetch-depth: 0
       - name: Analyze with SonarCloud
 
         # You can pin the exact commit or the version.
@@ -51,9 +55,12 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # Generate a token on Sonarcloud.io, add it to the secrets of this repo with the name SONAR_TOKEN (Settings > Secrets > Actions > add new repository secret)
         with:
-          # Tota la configuració (projectKey, organization, sources, exclusions, etc.)
-          # està al fitxer sonar-project.properties a l'arrel del repositori.
+          # Paràmetres obligatoris (han d'estar als args)
+          args: >
+            -Dsonar.projectKey=mnebot_picar-x-mnebot
+            -Dsonar.organization=mnebot
+          # La resta de configuració (sources, exclusions, etc.) està al fitxer
+          # sonar-project.properties a l'arrel del repositori.
           # SonarCloud llegeix automàticament aquest fitxer.
           # Només s'analitza la carpeta gpt_examples amb exclusiones per fitxers no rellevants.
-          # When you need the analysis to take place in a directory other than the one from which it was launched, default is .
           projectBaseDir: .
