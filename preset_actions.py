@@ -218,13 +218,11 @@ def celebrate(car):
 
 def honking(music):
     import utils
-    # utils.speak_block(music, "../sounds/car-double-horn.wav", 100)
-    music.sound_play_threading("../sounds/car-double-horn.wav", 100)
+    music.sound_play_threading("sounds/car-double-horn.wav", 100)
 
 def start_engine(music):
     import utils
-    # utils.speak_block(music, "../sounds/car-start-engine.wav", 100)
-    music.sound_play_threading("../sounds/car-start-engine.wav", 50)
+    music.sound_play_threading("sounds/car-start-engine.wav", 50)
 
 def advance_20cm(car):
     """Avança el cotxe aproximadament 20 cm endavant"""

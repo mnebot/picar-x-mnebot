@@ -2,28 +2,28 @@
 build/*
 bk/
 # Cache de Python
-gpt_examples/__pycache__/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
 # Imatges temporals d'entrada
-gpt_examples/img_imput.jpg
+img_imput.jpg
 
 # Fitxers de seguretat de l'editor nano
-gpt_examples/keys.py.save*
+keys.py.save*
 
 # Carpeta de fitxers de veu generats (TTS)
-gpt_examples/tts/
+tts/
 
 # Fitxers de configuració OpenAI
-gpt_examples/keys.py
+keys.py
 
 # Fitxers de SonarCloud
 sonarcloud_token.txt
-gpt_examples/analisi_sonarcloud_issues.md
+analisi_sonarcloud_issues.md
 
 # Fitxers de cobertura i tests
 htmlcov/
 .coverage
 coverage.xml
-gpt_examples/coverage.xml
-gpt_examples/htmlcov/
-gpt_examples/tests/__pycache__/
