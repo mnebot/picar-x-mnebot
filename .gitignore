@@ -19,3 +19,11 @@ gpt_examples/keys.py
 # Fitxers de SonarCloud
 sonarcloud_token.txt
 gpt_examples/analisi_sonarcloud_issues.md
+
+# Fitxers de cobertura i tests
+htmlcov/
+.coverage
+coverage.xml
+gpt_examples/coverage.xml
+gpt_examples/htmlcov/
+gpt_examples/tests/__pycache__/

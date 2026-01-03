@@ -47,6 +47,23 @@ jobs:
         uses: actions/checkout@v4 # <--- AIXÒ ÉS EL MÉS IMPORTANT
         with:
           fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-cov
+          # Instal·lar dependències del projecte si n'hi ha un requirements.txt
+          # pip install -r requirements.txt
+      
+      - name: Run tests with coverage
+        working-directory: .
+        run: |
+          pytest tests/ --cov=. --cov-report=xml:coverage.xml --cov-report=term || true
+      
       - name: Analyze with SonarCloud
 
         # You can pin the exact commit or the version.
@@ -62,5 +79,5 @@ jobs:
           # La resta de configuració (sources, exclusions, etc.) està al fitxer
           # sonar-project.properties a l'arrel del repositori.
           # SonarCloud llegeix automàticament aquest fitxer.
-          # Només s'analitza la carpeta gpt_examples amb exclusiones per fitxers no rellevants.
+          # S'analitza des de l'arrel amb exclusiones per fitxers no rellevants.
           projectBaseDir: .
