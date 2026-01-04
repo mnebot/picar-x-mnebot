@@ -52,10 +52,6 @@ else:
 openai_helper = OpenAiHelper(OPENAI_API_KEY, OPENAI_ASSISTANT_ID, 'picarx')
 
 LANGUAGE = 'ca'  # Catalan language code for STT
-# LANGUAGE = []  # Empty means auto-detect all languages
-# LANGUAGE = ['zh', 'en'] # config stt language code, https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
-
-# VOLUME_DB = 5
 VOLUME_DB = 3
 
 # Validar VOLUME_DB dins d'un rang raonable (0-10 per evitar distorsió)
@@ -74,7 +70,6 @@ VOICE_INSTRUCTIONS = ""
 SOUND_EFFECT_ACTIONS = ["honking", "start engine"]
 
 # car init 
-# =================================================================
 try:
     my_car = Picarx()
     time.sleep(1)
@@ -90,7 +85,6 @@ DEFAULT_HEAD_PAN = 0
 DEFAULT_HEAD_TILT = 20
 
 # Vilib start
-# =================================================================
 if with_img:
     from vilib import Vilib
     import cv2
@@ -109,25 +103,11 @@ if with_img:
     print('\n')
 
 # speech_recognition init
-# =================================================================
-'''
-self.energy_threshold = 300  # minimum audio energy to consider for recording
-self.dynamic_energy_threshold = True
-self.dynamic_energy_adjustment_damping = 0.15
-self.dynamic_energy_ratio = 1.5
-self.pause_threshold = 0.8  # seconds of non-speaking audio before a phrase is considered complete
-self.operation_timeout = None  # seconds after an internal operation (e.g., an API request) starts before it times out, or ``None`` for no timeout
-
-self.phrase_threshold = 0.3  # minimum seconds of speaking audio before we consider the speaking audio a phrase - values below this are ignored (for filtering out clicks and pops)
-self.non_speaking_duration = 0.5  # seconds of non-speaking audio to keep on both sides of the recording
-
-'''
 recognizer = sr.Recognizer()
 recognizer.dynamic_energy_adjustment_damping = 0.16
 recognizer.dynamic_energy_ratio = 1.6
 
 # speak_hanlder
-# =================================================================
 speech_loaded = False
 speech_lock = threading.Lock()
 tts_file = None
@@ -150,7 +130,6 @@ speak_thread.daemon = True
 
 
 # actions thread
-# =================================================================
 action_status = 'standby' # 'standby', 'think', 'actions', 'actions_done'
 led_status = 'standby' # 'standby', 'think' or 'actions', 'actions_done'
 last_action_status = 'standby'
@@ -165,9 +144,6 @@ action_lock = threading.Lock()
 def action_handler():
     global action_status, actions_to_be_done, led_status, last_action_status, last_led_status
 
-    # standby_actions = ['waiting', 'feet_left_right']
-    # standby_weights = [1, 0.3]
-
     action_interval = 5 # seconds
     last_action_time = time.time()
     last_led_time = time.time()
@@ -177,7 +153,6 @@ def action_handler():
             _state = action_status
 
         # led
-        # ------------------------------
         led_status = _state
 
         if led_status != last_led_status:
@@ -206,18 +181,14 @@ def action_handler():
                 led.on() 
 
         # actions
-        # ------------------------------
         if _state == 'standby':
             last_action_status = 'standby'
             if time.time() - last_action_time > action_interval:
-                # TODO: standby actions
                 last_action_time = time.time()
                 action_interval = random.randint(2, 6)
         elif _state == 'think':
             if last_action_status != 'think':
                 last_action_status = 'think'
-                # think(my_car)
-                # keep_think(my_car)  # Desactivat: no fer moviment del cap quan pensa
         elif _state == 'actions':
             last_action_status = 'actions'
             with action_lock:
@@ -238,9 +209,7 @@ def action_handler():
 action_thread = threading.Thread(target=action_handler)
 action_thread.daemon = True
 
-
 # person detection thread - detecta persones i diu "Hola"
-# =================================================================
 person_detected = False
 person_detection_lock = threading.Lock()
 GREETING_COOLDOWN = 5.0  # segons d'espera abans de tornar a saludar la mateixa persona
@@ -306,7 +275,6 @@ person_detection_thread.daemon = True
 
 
 # visual tracking thread - seguiment visual pur amb càmera (FASE 1, PAS 2 i 3)
-# =================================================================
 # Crear handler de seguiment visual (Vilib ja està importat abans si with_img)
 Vilib_module = Vilib if with_img and 'Vilib' in globals() else None
 visual_tracking_handler, visual_tracking_state, visual_tracking_lock, is_person_centered = create_visual_tracking_handler(
@@ -321,7 +289,6 @@ visual_tracking_thread.daemon = True
 
 
 # main
-# =================================================================
 def main():
     global current_feeling, last_feeling
     global speech_loaded
@@ -346,7 +313,6 @@ def main():
                 my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
 
             # listen
-            # ----------------------------------------------------------------
             gray_print("listening ...")
 
             with action_lock:
@@ -360,7 +326,6 @@ def main():
                 audio = recognizer.listen(source)
 
             # stt
-            # ----------------------------------------------------------------
             gray_print('stt ...')
             st = time.time()
             _result = openai_helper.stt(audio, language=LANGUAGE)
@@ -389,7 +354,6 @@ def main():
             raise ValueError("Invalid input mode")
 
         # chat-gpt
-        # ---------------------------------------------------------------- 
         gray_print(f'thinking ...')
         response = {}
         st = time.time()
@@ -431,7 +395,6 @@ def main():
         gray_print(f'chat takes: {time.time() - st:.3f} s')
 
         # actions & TTS
-        # ----------------------------------------------------------------
         _sound_actions = [] 
         try:
             if isinstance(response, dict):
