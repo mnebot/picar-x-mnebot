@@ -212,30 +212,14 @@ def processar_iteracio_tracking(vilib, detection_history, state, state_lock,
     if resultat is not None:
         posicio_suavitzada_x, posicio_suavitzada_y, _ = resultat
         
-        # Calcular canvis d'angle desitjats per centrar la persona
-        canvi_pan_desitjat = calcular_canvi_angle(
-            posicio_suavitzada_x,
-            CAMERA_WIDTH,
-            invertir=False
+        # Calcular i actualitzar angles de la càmera (elimina duplicació pan/tilt)
+        nou_pan_angle = calcular_i_actualitzar_angle(
+            posicio_suavitzada_x, CAMERA_WIDTH, pan_angle,
+            CAMERA_PAN_MIN_ANGLE, CAMERA_PAN_MAX_ANGLE, invertir=False
         )
-        canvi_tilt_desitjat = calcular_canvi_angle(
-            posicio_suavitzada_y,
-            CAMERA_HEIGHT,
-            invertir=True
-        )
-        
-        # Actualitzar angles de la càmera amb limitació de velocitat
-        nou_pan_angle = actualitzar_angle_camera(
-            pan_angle,
-            canvi_pan_desitjat,
-            CAMERA_PAN_MIN_ANGLE,
-            CAMERA_PAN_MAX_ANGLE
-        )
-        nou_tilt_angle = actualitzar_angle_camera(
-            tilt_angle,
-            canvi_tilt_desitjat,
-            CAMERA_TILT_MIN_ANGLE,
-            CAMERA_TILT_MAX_ANGLE
+        nou_tilt_angle = calcular_i_actualitzar_angle(
+            posicio_suavitzada_y, CAMERA_HEIGHT, tilt_angle,
+            CAMERA_TILT_MIN_ANGLE, CAMERA_TILT_MAX_ANGLE, invertir=True
         )
         
         # Aplicar els nous angles a la càmera amb validació
@@ -275,6 +259,28 @@ def actualitzar_angle_camera(angle_actual, canvi_desitjat, angle_min, angle_max)
     # Aplicar canvi i limitar dins del rang permès
     nou_angle = angle_actual + canvi_limit
     return clamp_number(nou_angle, angle_min, angle_max)
+
+
+def calcular_i_actualitzar_angle(posicio, dimensio_camera, angle_actual, 
+                                   angle_min, angle_max, invertir=False):
+    """
+    Calcula el canvi d'angle necessari per centrar la posició i actualitza l'angle de la càmera.
+    
+    Aquesta funció elimina la duplicació de codi en els càlculs de pan i tilt.
+    
+    Args:
+        posicio: Posició de la persona (x o y) en píxels
+        dimensio_camera: Dimensió de la càmera (amplada o alçada)
+        angle_actual: Angle actual de la càmera
+        angle_min: Angle mínim permès
+        angle_max: Angle màxim permès
+        invertir: Si és True, inverteix el signe del canvi (per tilt)
+    
+    Returns:
+        Nou angle de la càmera (limitada dins del rang permès)
+    """
+    canvi_desitjat = calcular_canvi_angle(posicio, dimensio_camera, invertir)
+    return actualitzar_angle_camera(angle_actual, canvi_desitjat, angle_min, angle_max)
 
 
 def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
