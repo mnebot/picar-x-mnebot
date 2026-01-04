@@ -489,6 +489,153 @@ class TestProcessarDeteccioPersona(unittest.TestCase):
         # L'historial hauria de tenir només DETECTION_HISTORY_SIZE elements
         self.assertEqual(len(self.detection_history['x']), DETECTION_HISTORY_SIZE)
         self.assertEqual(len(self.detection_history['y']), DETECTION_HISTORY_SIZE)
+    
+    def test_processar_deteccio_persona_centrada_exacta(self):
+        """Test de processar_deteccio_persona quan la persona està exactament al centre"""
+        from visual_tracking import processar_deteccio_persona, CAMERA_CENTER_X, CAMERA_CENTER_Y
+        
+        self.mock_vilib.detect_obj_parameter = {
+            'human_n': 1,
+            'human_x': CAMERA_CENTER_X,
+            'human_y': CAMERA_CENTER_Y
+        }
+        
+        resultat = processar_deteccio_persona(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock
+        )
+        
+        self.assertIsNotNone(resultat)
+        _, _, esta_centrada = resultat
+        self.assertTrue(esta_centrada)
+        with self.state_lock:
+            self.assertTrue(self.state['centered'])
+    
+    def test_processar_deteccio_persona_centrada_limits(self):
+        """Test de processar_deteccio_persona quan la persona està als límits de la zona central"""
+        from visual_tracking import processar_deteccio_persona, CAMERA_CENTER_X, CAMERA_CENTER_Y, CENTER_ZONE_TOLERANCE
+        
+        # Test al límit superior de la tolerància (just dins)
+        self.mock_vilib.detect_obj_parameter = {
+            'human_n': 1,
+            'human_x': CAMERA_CENTER_X + CENTER_ZONE_TOLERANCE - 1,
+            'human_y': CAMERA_CENTER_Y + CENTER_ZONE_TOLERANCE - 1
+        }
+        
+        resultat = processar_deteccio_persona(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock
+        )
+        
+        self.assertIsNotNone(resultat)
+        _, _, esta_centrada = resultat
+        self.assertTrue(esta_centrada)
+        
+        # Test al límit inferior de la tolerància (just dins)
+        self.mock_vilib.detect_obj_parameter = {
+            'human_n': 1,
+            'human_x': CAMERA_CENTER_X - CENTER_ZONE_TOLERANCE + 1,
+            'human_y': CAMERA_CENTER_Y - CENTER_ZONE_TOLERANCE + 1
+        }
+        
+        resultat = processar_deteccio_persona(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock
+        )
+        
+        self.assertIsNotNone(resultat)
+        _, _, esta_centrada = resultat
+        self.assertTrue(esta_centrada)
+    
+    def test_processar_deteccio_persona_no_centrada_limits(self):
+        """Test de processar_deteccio_persona quan la persona està just fora dels límits"""
+        from visual_tracking import processar_deteccio_persona, CAMERA_CENTER_X, CAMERA_CENTER_Y, CENTER_ZONE_TOLERANCE
+        
+        # Netejar l'historial per evitar interferències de tests anteriors
+        self.detection_history['x'].clear()
+        self.detection_history['y'].clear()
+        
+        # Test just fora del límit (X fora, Y dins)
+        # Utilitzem valors clarament fora de la tolerància per evitar problemes amb la mitjana ponderada
+        self.mock_vilib.detect_obj_parameter = {
+            'human_n': 1,
+            'human_x': CAMERA_CENTER_X + CENTER_ZONE_TOLERANCE + 50,  # Clarament fora
+            'human_y': CAMERA_CENTER_Y
+        }
+        
+        resultat = processar_deteccio_persona(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock
+        )
+        
+        self.assertIsNotNone(resultat)
+        _, _, esta_centrada = resultat
+        self.assertFalse(esta_centrada, "Persona amb X clarament fora hauria de no estar centrada")
+        
+        # Netejar l'historial per al segon test
+        self.detection_history['x'].clear()
+        self.detection_history['y'].clear()
+        
+        # Test just fora del límit (Y fora, X dins)
+        self.mock_vilib.detect_obj_parameter = {
+            'human_n': 1,
+            'human_x': CAMERA_CENTER_X,
+            'human_y': CAMERA_CENTER_Y + CENTER_ZONE_TOLERANCE + 50  # Clarament fora
+        }
+        
+        resultat = processar_deteccio_persona(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock
+        )
+        
+        self.assertIsNotNone(resultat)
+        _, _, esta_centrada = resultat
+        self.assertFalse(esta_centrada, "Persona amb Y clarament fora hauria de no estar centrada")
+    
+    def test_processar_deteccio_persona_no_hasattr_vilib(self):
+        """Test de processar_deteccio_persona quan vilib no té detect_obj_parameter"""
+        from visual_tracking import processar_deteccio_persona
+        
+        # Crear mock sense detect_obj_parameter
+        mock_vilib_sense_param = Mock()
+        del mock_vilib_sense_param.detect_obj_parameter
+        
+        resultat = processar_deteccio_persona(
+            mock_vilib_sense_param, self.detection_history, self.state, self.state_lock
+        )
+        
+        self.assertIsNone(resultat)
+    
+    def test_processar_deteccio_persona_actualitza_estat_centered(self):
+        """Test que processar_deteccio_persona actualitza correctament l'estat centered"""
+        from visual_tracking import processar_deteccio_persona, CAMERA_CENTER_X, CAMERA_CENTER_Y
+        
+        # Inicialment no està centrada
+        with self.state_lock:
+            self.state['centered'] = False
+        
+        # Persona centrada
+        self.mock_vilib.detect_obj_parameter = {
+            'human_n': 1,
+            'human_x': CAMERA_CENTER_X,
+            'human_y': CAMERA_CENTER_Y
+        }
+        
+        processar_deteccio_persona(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock
+        )
+        
+        with self.state_lock:
+            self.assertTrue(self.state['centered'])
+        
+        # Persona no centrada
+        self.mock_vilib.detect_obj_parameter = {
+            'human_n': 1,
+            'human_x': CAMERA_CENTER_X + 100,
+            'human_y': CAMERA_CENTER_Y + 100
+        }
+        
+        processar_deteccio_persona(
+            self.mock_vilib, self.detection_history, self.state, self.state_lock
+        )
+        
+        with self.state_lock:
+            self.assertFalse(self.state['centered'])
 
 
 class TestAplicarAnglesCamera(unittest.TestCase):
@@ -628,6 +775,49 @@ class TestVisualTrackingHandlerLoop(unittest.TestCase):
         
         # Quan s'executi el handler, hauria de cridar time.sleep amb VILIB_INIT_DELAY
         # Però no podem executar-lo completament, només verificar que existeix
+    
+    @patch('visual_tracking.time.sleep')
+    @patch('visual_tracking.processar_iteracio_tracking')
+    def test_handler_execution_with_controlled_loop(self, mock_processar_iteracio, mock_sleep):
+        """Test que executa el handler de manera controlada amb mock que permet sortir del loop"""
+        from visual_tracking import VILIB_INIT_DELAY, TRACKING_LOOP_DELAY
+        
+        mock_car = Mock()
+        mock_vilib = Mock()
+        mock_vilib.detect_obj_parameter = {'human_n': 1}
+        
+        # Configurar mock per retornar angles i permetre sortir del loop
+        call_count = {'iterations': 0}
+        def mock_processar_side_effect(*args, **kwargs):
+            call_count['iterations'] += 1
+            if call_count['iterations'] > 2:  # Executar 2 iteracions i després sortir
+                raise KeyboardInterrupt("Test exit")
+            return (0, 20)
+        
+        mock_processar_iteracio.side_effect = mock_processar_side_effect
+        
+        # Configurar mock_sleep per llançar excepció després d'algunes crides
+        sleep_calls = []
+        def mock_sleep_side_effect(delay):
+            sleep_calls.append(delay)
+            if len(sleep_calls) > 10:  # Sortir després d'alguns sleeps
+                raise KeyboardInterrupt("Test exit")
+        
+        mock_sleep.side_effect = mock_sleep_side_effect
+        
+        handler, state, lock, is_centered_func = create_visual_tracking_handler(
+            mock_car, mock_vilib, True, 20
+        )
+        
+        # Executar handler - hauria de cridar sleep amb VILIB_INIT_DELAY primer
+        try:
+            handler()
+        except KeyboardInterrupt:
+            pass  # Sortida controlada del loop
+        
+        # Verificar que s'ha cridat time.sleep amb VILIB_INIT_DELAY
+        self.assertTrue(len(sleep_calls) > 0)
+        self.assertEqual(sleep_calls[0], VILIB_INIT_DELAY)
 
 
 class TestProcessarIteracioTracking(unittest.TestCase):
