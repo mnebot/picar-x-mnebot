@@ -5,6 +5,9 @@ After=multi-user.target network.target
 Wants=network.target
 
 [Service]
+Environment=USER=arnau
+Environment=HOME=/home/arnau
+Environment=LOGNAME=arnau
 Type=simple
 User=arnau
 Group=arnau
