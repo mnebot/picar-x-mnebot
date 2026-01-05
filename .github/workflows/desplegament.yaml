@@ -1,0 +1,20 @@
+name: Desplegament
+
+on:
+  workflow_run:
+    workflows: ["Validacions"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  desplegament:
+    runs-on: ubuntu-latest
+    # Només executar si el workflow de validacions ha acabat amb èxit
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+      - name: Hola
+        run: echo "hola"
+
