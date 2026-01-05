@@ -22,7 +22,14 @@ import random
 import tempfile
 
 import os
+import pwd
 import sys
+
+# Forcem que os.getlogin retorni l'usuari correcte sense buscar un terminal
+def mocked_getlogin():
+    return pwd.getpwuid(os.getuid())[0]
+
+os.getlogin = mocked_getlogin
 
 os.environ['SDL_AUDIODRIVER'] = 'pulse' # PipeWire a Bookworm emula PulseAudio - necessary per a que raspberry pi 4 to work with sound
 

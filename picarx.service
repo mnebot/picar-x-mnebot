@@ -8,6 +8,8 @@ Wants=network.target
 Environment=USER=arnau
 Environment=HOME=/home/arnau
 Environment=LOGNAME=arnau
+# Forcem el terminal fals per si la llibreria el busca per una altra via
+Environment=PYTHONUNBUFFERED=1
 Type=simple
 User=arnau
 Group=arnau
