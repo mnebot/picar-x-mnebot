@@ -5,14 +5,15 @@ on:
     workflows: ["Validacions"]
     types:
       - completed
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   desplegament:
     runs-on: ubuntu-latest
-    # Només executar si el workflow de validacions ha acabat amb èxit
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Si s'executa manualment (workflow_dispatch), sempre executar
+    # Si s'executa després de validacions (workflow_run), només si ha acabat amb èxit
+    # I només per push a main o pull requests a main
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.event == 'pull_request')) }}
     
     steps:
       - name: Hola
