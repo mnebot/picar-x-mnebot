@@ -1,0 +1,27 @@
+# https://www.freedesktop.org/software/systemd/man/systemd.service.html
+[Unit]
+Description=Picar-X Robot Service
+After=multi-user.target network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=arnau
+Group=arnau
+WorkingDirectory=/home/arnau/picar-x-mnebot
+ExecStart=/usr/bin/python3 /home/arnau/picar-x-mnebot/gpt_car.py
+Restart=always
+RestartSec=10
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+# No requereix TTY
+TTYPath=/dev/null
+# Variables d'entorn necessàries
+Environment="PYTHONUNBUFFERED=1"
+# Permetre accés a dispositius (per a la càmera i hardware)
+SupplementaryGroups=video gpio i2c
+
+[Install]
+WantedBy=multi-user.target
+

@@ -4,7 +4,12 @@ from preset_actions import actions_dict, sounds_dict
 from utils import gray_print, speak_block, sox_volume, redirect_error_2_null, cancel_redirect_error
 from visual_tracking import create_visual_tracking_handler
 
-import readline # optimize keyboard input, only need to import
+# readline només s'utilitza per optimitzar input de teclat, però pot fallar sense TTY
+try:
+    import readline  # optimize keyboard input, only need to import
+except (ImportError, OSError):
+    # Si readline no està disponible o no hi ha TTY, continuar sense ell
+    pass
 
 import speech_recognition as sr
 
@@ -37,8 +42,16 @@ os.makedirs(tts_dir, mode=0o755, exist_ok=True)
 input_mode = None
 with_img = True
 args = sys.argv[1:]
+
+# Comprovar si hi ha TTY disponible
+has_tty = sys.stdin.isatty() if hasattr(sys.stdin, 'isatty') else False
+
 if '--keyboard' in args:
-    input_mode = 'keyboard'
+    if has_tty:
+        input_mode = 'keyboard'
+    else:
+        print('Warning: --keyboard especificat però no hi ha TTY disponible. Usant mode voice.')
+        input_mode = 'voice'
 else:
     input_mode = 'voice'
 
@@ -344,7 +357,14 @@ def main():
             with action_lock:
                 action_status = 'standby'
 
-            _result = input(f'\033[1;30m{"input: "}\033[0m').encode(sys.stdin.encoding).decode('utf-8')
+            try:
+                _result = input(f'\033[1;30m{"input: "}\033[0m').encode(sys.stdin.encoding).decode('utf-8')
+            except (EOFError, OSError) as e:
+                # Si no hi ha TTY disponible, canviar a mode voice
+                print(f'Error: No TTY disponible per input de teclat: {e}')
+                print('Canviant a mode voice...')
+                input_mode = 'voice'
+                continue
 
             if not _result or _result == "":
                 print() # new line

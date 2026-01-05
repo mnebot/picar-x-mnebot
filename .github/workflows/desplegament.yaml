@@ -16,6 +16,48 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.event == 'pull_request')) }}
     
     steps:
-      - name: Hola
-        run: echo "hola"
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Determinar branca a desplegar
+        id: branch
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Si s'executa manualment, usar main per defecte
+            echo "branch=main" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.workflow_run.event }}" == "pull_request" ]; then
+            # Si és una pull request, usar la branca de la PR
+            echo "branch=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT
+          else
+            # Si és un push a main, usar main
+            echo "branch=main" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
 
+      - name: Desplegar codi al robot
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.PI_TAILSCALE_IP }}
+          username: ${{ secrets.PI_USER }}
+          password: ${{ secrets.PI_PASSWORD }}
+          script: |
+            BRANCH="${{ steps.branch.outputs.branch }}"
+            echo "Desplegant branca: $BRANCH"
+            cd /home/arnau/picar-x-mnebot
+            git fetch origin
+            git checkout $BRANCH
+            git pull origin $BRANCH
+            echo "Codi desplegat correctament a la branca $BRANCH"
+            # Copiar el fitxer de servei al directori systemd
+            sudo cp picarx.service /etc/systemd/system/picarx.service
+            sudo systemctl daemon-reload
+            sudo systemctl restart picarx.service
+            sudo systemctl enable picarx.service
+            echo "Robot en execució"
