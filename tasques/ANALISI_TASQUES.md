@@ -88,9 +88,9 @@ Aquest document analitza l'estat d'implementació de les tasques definides al pl
 - ⚠️ Cal revisar imports optimitzats
 - ⚠️ Cal revisar principis SOLID aplicats
 
-**Cobertura actual**: 11.11% (objectiu: 70% mínim per a codi nou)
-- `visual_tracking.py`: 21.55% de cobertura
-- Cal millorar cobertura especialment de funcions principals del handler
+**Cobertura actual**: 14.97% (total projecte)
+- `visual_tracking.py`: **97.41% de cobertura** ✅ (supera objectiu del 70%)
+- Cobertura excel·lent, només 3 línies no cobertes (loop infinit del handler)
 
 ---
 
@@ -113,30 +113,41 @@ Aquest document analitza l'estat d'implementació de les tasques definides al pl
 ---
 
 #### 3. Creació/actualització de test unitaris
-**Estat**: ✅ **COMPLETAT**
+**Estat**: ✅ **COMPLETAT** (Millorat significativament)
 
 **Evidències**:
-- Fitxer `tests/test_visual_tracking.py` creat amb 135 tests en total
+- Fitxer `tests/test_visual_tracking.py` actualitzat amb 57 tests en total
 - Tests per a totes les funcions principals:
   - `test_clamp_number`: 4 tests
   - `test_calcular_mitjana_ponderada`: 5 tests
   - `test_calcular_canvi_angle`: 6 tests
   - `test_actualitzar_angle_camera`: 5 tests
   - `test_create_visual_tracking_handler`: 6 tests
-  - `test_processar_deteccio_persona`: 5 tests
+  - `test_processar_deteccio_persona`: 10 tests (5 originals + 5 nous)
   - `test_aplicar_angles_camera`: 3 tests
   - `test_processar_iteracio_tracking`: 3 tests
-  - Altres tests de handlers: 8+ tests
+  - `test_handler_execution_with_controlled_loop`: 1 test nou
+  - Altres tests de handlers: 14+ tests
+
+**Nous tests afegits**:
+- `test_processar_deteccio_persona_centrada_exacta`: Test persona exactament al centre
+- `test_processar_deteccio_persona_centrada_limits`: Test persona als límits de zona central
+- `test_processar_deteccio_persona_no_centrada_limits`: Test persona just fora dels límits
+- `test_processar_deteccio_persona_no_hasattr_vilib`: Test quan vilib no té detect_obj_parameter
+- `test_processar_deteccio_persona_actualitza_estat_centered`: Test actualització d'estat
+- `test_handler_execution_with_controlled_loop`: Test execució controlada del handler
 
 **Cobertura**:
-- Total projecte: 11.11%
-- `visual_tracking.py`: 21.55%
-- ⚠️ **NO assoleix el 70% mínim requerit** per a codi nou
+- Total projecte: 14.97%
+- `visual_tracking.py`: **97.41%** ✅
+- ✅ **Supera àmpliament el 70% mínim requerit** per a codi nou
 
-**Pendent**:
-- ⚠️ Millorar cobertura fins al 70% mínim
-- Tests utilitzen mocks adequadament
-- Tests són independents i repetibles
+**Resultats**:
+- ✅ 57 tests, tots passen
+- ✅ Cobertura 97.41% (supera objectiu del 70%)
+- ✅ Tests utilitzen mocks adequadament
+- ✅ Tests són independents i repetibles
+- ✅ Casos edge coberts (persona centrada/no centrada, límits, etc.)
 
 ---
 
@@ -327,7 +338,7 @@ Afegir secció al README documentant:
 |-------|-------|-------|
 | Refactorització | ⚠️ Parcial | Codi net però pot millorar |
 | Validació qualitat | ✅ Completat | Bona gestió d'errors |
-| Tests unitaris | ✅ Completat | ⚠️ Cobertura baixa (21.55% vs 70% objectiu) |
+| Tests unitaris | ✅ **COMPLETAT** | ✅ Cobertura 97.41% (supera 70% objectiu) |
 | Tests d'inici | ❌ No implementat | Cal implementar |
 | Deute tècnic | ❌ No implementat | Cal crear fitxer |
 | README | ⚠️ Parcial | Actualitzat però falta detall FASE 1 |
@@ -338,9 +349,10 @@ Afegir secció al README documentant:
 
 ### Alta Prioritat (Completar FASE 1)
 
-1. **Millorar cobertura de tests fins al 70%** (actualment 21.55%)
-   - Afegir més tests per a funcions principals
-   - Tests d'integració per al handler complet
+1. ✅ **Millorar cobertura de tests fins al 70%** (COMPLETAT: 97.41%)
+   - ✅ Afegits 6 nous tests per a funcions principals
+   - ✅ Tests per a casos edge (persona centrada/no centrada, límits)
+   - ✅ Cobertura supera àmpliament l'objectiu
 
 2. **Crear fitxer deute_tecnic.txt**
    - Documentar decisions de FASE 1
@@ -373,7 +385,12 @@ Afegir secció al README documentant:
 
 - La **FASE 1 està completada funcionalment** però li falten algunes tasques de finalització
 - El codi està ben estructurat i documentat
-- Els tests existeixen però la cobertura és baixa
+- ✅ **Tests unitaris completats amb cobertura del 97.41%** (supera objectiu del 70%)
+- ✅ **57 tests passen correctament**
+- Tasques pendents de finalització:
+  - Tests d'inici (flag --skip-tests/--run-tests)
+  - Deute tècnic (fitxer deute_tecnic.txt)
+  - README actualitzat amb detalls FASE 1
 - Cal completar les tasques de finalització abans de considerar FASE 1 100% completa
 - Les fases següents (2-5) no han estat iniciades
 

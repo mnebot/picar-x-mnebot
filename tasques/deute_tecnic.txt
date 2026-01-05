@@ -1,0 +1,418 @@
+DEUTE TÈCNIC - PROJECTE PICAR-X
+=================================
+
+Aquest document documenta el deute tècnic conegut del projecte, incloent decisions
+tècniques preses per rapidesa, codi que necessita millores futures, limitacions
+conegudes i dependències problemàtiques.
+
+Data d'última actualització: Generat automàticament
+
+---
+
+## DEUTE TÈCNIC DE LA FASE 1: SEGUIMENT VISUAL PUR
+
+### 1. GESTIÓ D'ESTAT AMB DICcionari SIMPLE
+
+**Ubicació**: `visual_tracking.py` línia 325
+**Prioritat**: Mitjana
+**Impacte**: Mantenibilitat, extensibilitat
+
+**Descripció**:
+L'estat del seguiment visual està implementat com un diccionari simple `{'centered': False}`.
+Això funciona però dificulta l'extensió futura (especialment per a FASE 4 amb màquina d'estats).
+
+**Problema**:
+- Difícil afegir nous camps d'estat sense afectar tots els usos
+- No hi ha validació de tipus
+- L'encapsulació és limitada
+
+**Solució proposada**:
+Crear una classe `TrackingState` o utilitzar dataclass per gestionar l'estat.
+Veure TASCA 3 de REFACTORITZACIO_FASE1.md.
+
+**Quan solucionar**:
+Abans de FASE 4 (quan s'implementi la màquina d'estats), o com a part de les
+refactoritzacions de la FASE 1.
+
+---
+
+### 2. DETECTION_HISTORY COM A DICcionari SIMPLE
+
+**Ubicació**: `visual_tracking.py` línies 346-349, 231-232
+**Prioritat**: Baixa
+**Impacte**: Organització, mantenibilitat
+
+**Descripció**:
+L'històric de deteccions està implementat com un diccionari simple `{'x': [], 'y': []}`.
+Això funciona però requereix mantenir manualment la coherència entre les dues llistes.
+
+**Problema**:
+- Cal recordar buidar/actualitzar ambdues llistes (x i y) sempre juntes
+- No hi ha garanties que les llistes tinguin la mateixa longitud
+- Codi duplicat per gestionar les dues llistes
+
+**Solució proposada**:
+Crear classe `DetectionHistory` que encapsuli la gestió de les dues llistes.
+Veure TASCA 5 de REFACTORITZACIO_FASE1.md.
+
+**Quan solucionar**:
+Com a part de les refactoritzacions de la FASE 1 (baixa prioritat).
+
+---
+
+### 3. CONSTANTS MÀGIQUES EN CÀLCUL D'ANGLES
+
+**Ubicació**: `visual_tracking.py` línia 99
+**Prioritat**: Baixa
+**Impacte**: Llegibilitat, mantenibilitat
+
+**Descripció**:
+El càlcul d'angle utilitza constants màgiques (10 i 5) sense documentació clara.
+
+**Codi actual**:
+```python
+canvi = (coordenada * 10 / dimensio_camera) - 5
+```
+
+**Problema**:
+- No és clar què representen els valors 10 i 5
+- Difícil ajustar si cal canviar el comportament
+
+**Solució proposada**:
+Extreure a constants nombrats:
+```python
+ANGLE_SCALE_FACTOR = 10
+ANGLE_OFFSET = 5
+```
+Veure TASCA 7 de REFACTORITZACIO_FASE1.md.
+
+**Quan solucionar**:
+Com a part de les refactoritzacions de la FASE 1 (baixa prioritat).
+
+---
+
+### 4. CONSTANTS DE CÀMERA NO AGRUPADES
+
+**Ubicació**: `visual_tracking.py` línies 11-23
+**Prioritat**: Baixa
+**Impacte**: Organització
+
+**Descripció**:
+Les constants relacionades amb la càmera estan escampades i tenen valors duplicats
+(pan i tilt tenen els mateixos valors mínim/màxim).
+
+**Problema**:
+- Valors duplicats (pan i tilt amb mateixos límits)
+- Difícil modificar configuració de càmera
+- Constants relacionades no estan agrupades
+
+**Solució proposada**:
+Agrupar en estructura de configuració.
+Veure TASCA 1 de REFACTORITZACIO_FASE1.md.
+
+**Quan solucionar**:
+Com a part de les refactoritzacions de la FASE 1 (mitjana prioritat).
+
+---
+
+### 5. GESTIÓ D'ERRORS AMB PRINT()
+
+**Ubicació**: `visual_tracking.py` línies 188, 364
+**Prioritat**: Mitjana
+**Impacte**: Debugging, logging
+
+**Descripció**:
+Els errors es gestionen amb `print()` directament en lloc d'utilitzar un sistema
+de logging adequat.
+
+**Codi actual**:
+```python
+print(f'[Visual Tracking] Error actualitzant angles de càmera: {e}')
+print(f'[Visual Tracking] Error: {e}')
+```
+
+**Problema**:
+- No es pot controlar el nivell de logging
+- Difícil filtrar o redirigir logs
+- No hi ha timestamp consistent amb la resta del codi (gpt_car.py utilitza gray_print)
+
+**Solució proposada**:
+Utilitzar el sistema de logging de Python o utilitzar gray_print() com a la resta
+del codi per consistència.
+
+**Quan solucionar**:
+Com a millora de qualitat del codi (mitjana prioritat).
+
+---
+
+### 6. VALIDACIONS DE PARÀMETRES NO CONSOLIDADES
+
+**Ubicació**: `visual_tracking.py` línies 307-322
+**Prioritat**: Baixa
+**Impacte**: Organització
+
+**Descripció**:
+Les validacions de paràmetres a `create_visual_tracking_handler()` estan escampades
+i podrien consolidar-se en una funció helper.
+
+**Problema**:
+- Codi repetitiu en validacions
+- Funció principal massa llarga
+- Dificulta testejar validacions per separat
+
+**Solució proposada**:
+Extreure validacions a funció helper `_validar_parametres()`.
+Veure TASCA 4 de REFACTORITZACIO_FASE1.md.
+
+**Quan solucionar**:
+Com a part de les refactoritzacions de la FASE 1 (baixa prioritat).
+
+---
+
+### 7. LOOP INFINIT DIFÍCIL DE TESTEJAR
+
+**Ubicació**: `visual_tracking.py` línies 355-365
+**Prioritat**: Baixa
+**Impacte**: Testing
+
+**Descripció**:
+El handler té un loop infinit que és difícil de testejar completament.
+
+**Problema**:
+- 3 línies no cobertes per tests (334, 364-365)
+- Difícil testar el comportament complet del loop
+- Cal utilitzar mocks complexos per testar-lo
+
+**Solució proposada**:
+Aquesta és una limitació acceptada. El loop infinit és necessari per al
+funcionament i es pot testar parcialment amb mocks. La cobertura del 97.44%
+és excel·lent.
+
+**Quan solucionar**:
+Això NO és una prioritat. El comportament està ben testat i la cobertura és
+excel·lent. Només seria un problema si necessitem testar comportament més complex
+del loop.
+
+---
+
+### 8. LIMITACIÓ: NO GESTIONA MÚLTIPLES PERSONES
+
+**Ubicació**: `visual_tracking.py` línies 120-122
+**Prioritat**: N/A (funcionalitat futura)
+**Impacte**: Funcionalitat
+
+**Descripció**:
+El codi actual només gestiona una persona (agafa la primera detectada).
+No hi ha lògica per triar entre múltiples persones.
+
+**Problema**:
+- Si hi ha múltiples persones, sempre segueix la primera
+- No hi ha estratègia per triar quina persona seguir
+- Pot ser confús si hi ha múltiples persones al camp de visió
+
+**Solució proposada**:
+Això és una funcionalitat futura (FASE 5.3 segons el pla de tasques).
+Implementar lògica per:
+- Triar la persona més centrada
+- Triar la persona més propera
+- Seguir la persona que s'estava seguint prèviament
+
+**Quan solucionar**:
+Quan s'implementi FASE 5 (Millores avançades - opcional).
+
+---
+
+### 9. LIMITACIÓ: NO HI HA TIMEOUT PER PERDUA DE PERSONA
+
+**Ubicació**: `visual_tracking.py` línia 122
+**Prioritat**: N/A (funcionalitat futura)
+**Impacte**: Funcionalitat
+
+**Descripció**:
+Quan no es detecta persona, simplement es buida l'historial però no hi ha
+lògica per detectar que la persona s'ha "perdut" durant un cert temps.
+
+**Problema**:
+- No es distingeix entre "no hi ha persona" i "persona perduda"
+- No es pot activar recerca (això és part de FASE 2)
+
+**Solució proposada**:
+Això és funcionalitat de FASE 2 (Moviment reactiu).
+Implementar detecció de pèrdua de persona després de 0.5s sense detecció.
+
+**Quan solucionar**:
+Quan s'implementi FASE 2 (Moviment reactiu).
+
+---
+
+### 10. LIMITACIÓ: ESTAT BOOLEAN SIMPLE PER "CENTRADA"
+
+**Ubicació**: `visual_tracking.py` línia 325
+**Prioritat**: N/A (funcionalitat futura)
+**Impacte**: Funcionalitat
+
+**Descripció**:
+L'estat només té un camp boolean `centered`. Per a FASE 4 (Màquina d'estats)
+caldrà un sistema d'estats més complex.
+
+**Problema**:
+- Només distingueix entre "centrada" i "no centrada"
+- FASE 4 requereix estats: SEARCHING, TRACKING, APPROACHING, LOST
+- El sistema actual no és extensible per aquests estats
+
+**Solució proposada**:
+Implementar màquina d'estats quan s'implementi FASE 4.
+Això requereix refactorització significativa de l'estat actual.
+
+**Quan solucionar**:
+Quan s'implementi FASE 4 (Estats i màquina d'estats).
+
+---
+
+## DEUTE TÈCNIC GENERAL DEL PROJECTE
+
+### 11. GESTIÓ DE THREADS AMB VARIABLES GLOBALS
+
+**Ubicació**: `gpt_car.py` múltiples llocs
+**Prioritat**: Mitjana
+**Impacte**: Mantenibilitat, seguretat de threads
+
+**Descripció**:
+El projecte utilitza variables globals i locks per gestionar estat compartit
+entre threads.
+
+**Exemples**:
+- `action_status`, `action_lock`
+- `speech_loaded`, `speech_lock`
+- `person_detected`, `person_detection_lock`
+
+**Problema**:
+- Difícil de mantenir
+- Fàcil tenir race conditions si no s'utilitzen locks correctament
+- No hi ha encapsulació
+
+**Solució proposada**:
+Crear classes que encapsulin estat i locks. Això és una refactorització gran
+que s'hauria de fer gradualment.
+
+**Quan solucionar**:
+Refactorització gradual, especialment quan s'afegeixin noves funcionalitats.
+
+---
+
+### 12. DEPENDÈNCIA DE VILIB I PICARX (HARDWARE)
+
+**Ubicació**: Tot el projecte
+**Prioritat**: N/A (limitació inherent)
+**Impacte**: Testing, desenvolupament
+
+**Descripció**:
+El projecte depèn fortament de biblioteques d'hardware (Vilib, picarx, robot_hat)
+que només funcionen en hardware real (Raspberry Pi).
+
+**Problema**:
+- No es pot executar completament sense hardware
+- Testing limitat (cal utilitzar mocks extensius)
+- Desenvolupament només possible amb hardware disponible
+
+**Solució proposada**:
+Això és una limitació inherent del projecte. S'hauria de:
+- Mantenir mocks adequats per tests
+- Documentar clarament dependències d'hardware
+- Considerar emulació si és possible (però probablement no ho és)
+
+**Quan solucionar**:
+Això NO es pot "solucionar" perquè és inherent al projecte. Només cal documentar
+i mantenir mocks adequats.
+
+---
+
+### 13. FALTA DE CONFIGURACIÓ CENTRALITZADA
+
+**Ubicació**: `gpt_car.py`, `visual_tracking.py`
+**Prioritat**: Baixa
+**Impacte**: Mantenibilitat
+
+**Descripció**:
+Les constants de configuració estan escampades per diferents fitxers sense
+un fitxer central de configuració.
+
+**Exemples**:
+- Constants a `visual_tracking.py` (línies 11-31)
+- Constants a `gpt_car.py` (DEFAULT_HEAD_TILT, VOLUME_DB, etc.)
+
+**Problema**:
+- Difícil canviar configuració
+- No hi ha un sol lloc per veure tots els paràmetres configurables
+- No es pot carregar configuració des de fitxer
+
+**Solució proposada**:
+Crear fitxer de configuració central (config.py o config.yaml) que exporti
+totes les constants configurables.
+
+**Quan solucionar**:
+Quan el projecte creixi i hi hagi més paràmetres de configuració.
+
+---
+
+### 14. MANCA DE TIPAT ESTÀTIC
+
+**Ubicació**: Tot el projecte
+**Prioritat**: Baixa
+**Impacte**: Detecció d'errors, mantenibilitat
+
+**Descripció**:
+El codi no utilitza type hints ni tipat estàtic (mypy).
+
+**Problema**:
+- Errors de tipus es detecten només en execució
+- Menys autocompletat en IDEs
+- Documentació de tipus manual (en docstrings)
+
+**Solució proposada**:
+Afegir type hints gradualment, especialment en funcions públiques.
+Utilitzar mypy per validació de tipus.
+
+**Quan solucionar**:
+Refactorització gradual, especialment quan s'afegeixi nou codi.
+
+---
+
+## RESUM PER PRIORITAT
+
+### Alta Prioritat
+(Ninguna actualment - la FASE 1 està funcional i ben testada)
+
+### Mitjana Prioritat
+1. Gestió d'estat amb diccionari simple (abans de FASE 4)
+2. Gestió d'errors amb print() (millora de qualitat)
+3. Gestió de threads amb variables globals (refactorització gradual)
+
+### Baixa Prioritat
+4. Detection_history com a diccionari simple
+5. Constants màgiques en càlcul d'angles
+6. Constants de càmera no agrupades
+7. Validacions de paràmetres no consolidades
+8. Falta de configuració centralitzada
+9. Manca de tipat estàtic
+
+### Limitacions (No són deute tècnic, són funcionalitat futura)
+10. No gestiona múltiples persones (FASE 5.3)
+11. No hi ha timeout per pèrdua de persona (FASE 2)
+12. Estat boolean simple (FASE 4)
+13. Dependència d'hardware (limitació inherent)
+
+---
+
+## NOTES FINALS
+
+- El deute tècnic documentat aquí NO impedeix el funcionament actual
+- La FASE 1 funciona correctament amb el codi actual
+- El deute tècnic de mitjana/baixa prioritat es pot abordar gradualment
+- Les "limitacions" són funcionalitats futures, no errors
+- Cal prioritzar solucionar el deute tècnic abans d'afegir noves funcionalitats complexes
+
+**Recomanació**: Abordar deute tècnic de mitjana prioritat abans de FASE 4,
+i de baixa prioritat com a part de refactoritzacions generals.
+
+
