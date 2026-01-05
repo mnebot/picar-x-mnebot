@@ -7,6 +7,8 @@ on:
       - completed
   workflow_dispatch:
 
+permissions:
+  id-token: write # This is required for the tailscale action to request a JWT from GitHub
 jobs:
   desplegament:
     runs-on: ubuntu-latest
@@ -40,6 +42,7 @@ jobs:
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
 
       - name: Desplegar codi al robot
         uses: appleboy/ssh-action@v0.1.6
