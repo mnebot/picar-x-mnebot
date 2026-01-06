@@ -50,13 +50,13 @@ jobs:
           host: ${{ secrets.PI_TAILSCALE_IP }}
           username: ${{ secrets.PI_USER }}
           password: ${{ secrets.PI_PASSWORD }}
+          envs: BRANCH:${{ steps.branch.outputs.branch }}
           script: |
-            BRANCH="${{ steps.branch.outputs.branch }}"
             echo "Desplegant branca: $BRANCH"
             cd /home/arnau/picar-x-mnebot
             git fetch origin
-            git checkout $BRANCH
-            git pull origin $BRANCH
+            git checkout -- "$BRANCH"
+            git pull origin "$BRANCH"
             echo "Codi desplegat correctament a la branca $BRANCH"
             # Copiar el fitxer de servei al directori systemd
             sudo cp picarx.service /etc/systemd/system/picarx.service
