@@ -6,6 +6,12 @@ on:
     types:
       - completed
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branca a desplegar'
+        required: false
+        default: 'main'
+        type: string
 
 permissions:
   id-token: write # This is required for the tailscale action to request a JWT from GitHub
@@ -26,24 +32,7 @@ jobs:
       - name: Determinar branca a desplegar
         id: branch
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            # Si s'executa manualment, usar main per defecte
-            echo "branch=main" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" == "workflow_run" ]; then
-            # Si s'executa des d'un workflow_run
-            HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
-            WORKFLOW_EVENT="${{ github.event.workflow_run.event }}"
-            # Si és una pull request o la branca head no és main, usar la branca de la PR
-            if [ "$WORKFLOW_EVENT" == "pull_request" ] || ([ -n "$HEAD_BRANCH" ] && [ "$HEAD_BRANCH" != "main" ]); then
-              echo "branch=$HEAD_BRANCH" >> $GITHUB_OUTPUT
-            else
-              # Si és un push a main, usar main
-              echo "branch=main" >> $GITHUB_OUTPUT
-            fi
-          else
-            # Per defecte, usar main
-            echo "branch=main" >> $GITHUB_OUTPUT
-          fi
+          echo "branch=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_OUTPUT
       
       - name: Tailscale
         uses: tailscale/github-action@v2
@@ -54,18 +43,20 @@ jobs:
 
       - name: Desplegar codi al robot
         uses: appleboy/ssh-action@v0.1.6
+        env:
+          BRANCH_PR: ${{ steps.branch.outputs.branch }}
         with:
           host: ${{ secrets.PI_TAILSCALE_IP }}
           username: ${{ secrets.PI_USER }}
           password: ${{ secrets.PI_PASSWORD }}
-          envs: BRANCH:${{ steps.branch.outputs.branch }}
+          envs: BRANCH_PR
           script: |
             echo "Desplegant branca: $BRANCH"
             cd /home/arnau/picar-x-mnebot
             git fetch origin
-            git checkout -- "$BRANCH"
-            git pull origin "$BRANCH"
-            echo "Codi desplegat correctament a la branca $BRANCH"
+            git checkout -- "$BRANCH_PR"
+            git pull origin "$BRANCH_PR"
+            echo "Codi desplegat correctament a la branca $BRANCH_PR"
             # Copiar el fitxer de servei al directori systemd
             sudo cp picarx.service /etc/systemd/system/picarx.service
             sudo systemctl daemon-reload
