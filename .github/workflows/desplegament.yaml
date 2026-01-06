@@ -29,11 +29,19 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             # Si s'executa manualment, usar main per defecte
             echo "branch=main" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.workflow_run.event }}" == "pull_request" ]; then
-            # Si és una pull request, usar la branca de la PR
-            echo "branch=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "workflow_run" ]; then
+            # Si s'executa des d'un workflow_run
+            HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
+            WORKFLOW_EVENT="${{ github.event.workflow_run.event }}"
+            # Si és una pull request o la branca head no és main, usar la branca de la PR
+            if [ "$WORKFLOW_EVENT" == "pull_request" ] || ([ -n "$HEAD_BRANCH" ] && [ "$HEAD_BRANCH" != "main" ]); then
+              echo "branch=$HEAD_BRANCH" >> $GITHUB_OUTPUT
+            else
+              # Si és un push a main, usar main
+              echo "branch=main" >> $GITHUB_OUTPUT
+            fi
           else
-            # Si és un push a main, usar main
+            # Per defecte, usar main
             echo "branch=main" >> $GITHUB_OUTPUT
           fi
       
