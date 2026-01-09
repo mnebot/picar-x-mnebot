@@ -553,7 +553,7 @@ def capture_image(current_path_val, vilib_module=None):
             raise ValueError("Vilib.img no està disponible")
         cv2.imwrite(img_path, vilib_module.img)
         return img_path
-    except (cv2.error, ValueError, AttributeError) as e:
+    except (ValueError, AttributeError, Exception) as e:
         print(f'Warning: Could not write image file: {e}')
         # Try alternative location
         try:
@@ -597,6 +597,56 @@ def get_gpt_response(user_input, openai_helper_obj, with_img_flag, vilib_module=
     return response
 
 
+def _extract_actions_from_dict(response_dict):
+    """Extreu les accions d'un diccionari de resposta."""
+    if 'actions' in response_dict:
+        return list(response_dict['actions'])
+    return ['stop']
+
+
+def _extract_answer_from_dict(response_dict):
+    """Extreu la resposta d'un diccionari de resposta."""
+    return response_dict.get('answer', '')
+
+
+def _separate_sound_actions(actions, answer, sound_effect_actions):
+    """
+    Separa les accions que són efectes de so de les accions normals.
+    
+    Returns:
+        tuple: (filtered_actions, sound_actions)
+    """
+    if not answer:
+        return actions, []
+    
+    sound_actions = []
+    filtered_actions = []
+    
+    for action in actions:
+        if action in sound_effect_actions:
+            sound_actions.append(action)
+        else:
+            filtered_actions.append(action)
+    
+    return filtered_actions, sound_actions
+
+
+def _parse_dict_response(response_dict, sound_effect_actions):
+    """Processa una resposta que és un diccionari."""
+    actions = _extract_actions_from_dict(response_dict)
+    answer = _extract_answer_from_dict(response_dict)
+    actions, sound_actions = _separate_sound_actions(actions, answer, sound_effect_actions)
+    return actions, answer, sound_actions
+
+
+def _parse_string_response(response):
+    """Processa una resposta que és un string."""
+    response_str = str(response)
+    if response_str:
+        return [], response_str, []
+    return [], '', []
+
+
 def parse_gpt_response(response, sound_effect_actions):
     """
     Parseja la resposta de GPT i extreu accions, resposta i efectes de so.
@@ -604,41 +654,14 @@ def parse_gpt_response(response, sound_effect_actions):
     Returns:
         tuple: (actions, answer, sound_actions)
     """
-    sound_actions = []
     try:
         if isinstance(response, dict):
-            if 'actions' in response:
-                actions = list(response['actions'])
-            else:
-                actions = ['stop']
-
-            if 'answer' in response:
-                answer = response['answer']
-            else:
-                answer = ''
-
-            if len(answer) > 0:
-                _actions = actions.copy()
-                for _action in _actions:
-                    if _action in sound_effect_actions:
-                        sound_actions.append(_action)
-                        actions.remove(_action)
+            return _parse_dict_response(response, sound_effect_actions)
         else:
-            response_str = str(response)
-            if len(response_str) > 0:
-                actions = []
-                answer = response_str
-            else:
-                actions = []
-                answer = ''
+            return _parse_string_response(response)
     except Exception as e:
-        # Capturar excepcions específiques en lloc de genèriques
         print(f'Warning: Error processant resposta de GPT: {e}')
-        actions = []
-        answer = ''
-        sound_actions = []
-    
-    return (actions, answer, sound_actions)
+        return [], '', []
 
 
 def generate_tts(answer, openai_helper_obj, tts_dir_path, tts_voice, volume_db, 
@@ -706,43 +729,76 @@ def wait_for_actions_completion(action_lock_ref, action_status_ref):
         time.sleep(.01)
 
 
-def process_user_query(user_input, openai_helper_obj, with_img_flag, vilib_module, 
-                       current_path_val, action_lock_ref, action_status_ref, 
-                       actions_to_be_done_ref, speech_lock_ref, speech_loaded_ref,
-                       tts_file_ref, music_obj, tts_dir_path, tts_voice, volume_db,
-                       voice_instructions, sound_effect_actions):
+def process_user_query(user_input, config, action_state, speech_state, tts_config):
     """
     Processa una consulta de l'usuari: obté resposta de GPT, genera TTS i executa accions.
+    
+    Args:
+        user_input: Text de l'usuari
+        config: Diccionari amb configuració {
+            'openai_helper': OpenAiHelper instance,
+            'with_img': bool,
+            'vilib_module': Vilib module o None,
+            'current_path': str,
+            'music': Music instance,
+            'sound_effect_actions': list
+        }
+        action_state: Diccionari amb estat d'accions {
+            'lock': threading.Lock,
+            'status_ref': dict amb 'action_status',
+            'actions_to_be_done_ref': dict amb 'actions_to_be_done'
+        }
+        speech_state: Diccionari amb estat de veu {
+            'lock': threading.Lock,
+            'loaded_ref': dict amb 'speech_loaded',
+            'tts_file_ref': dict amb 'tts_file'
+        }
+        tts_config: Diccionari amb configuració TTS {
+            'dir_path': str,
+            'voice': str,
+            'volume_db': int/float,
+            'instructions': str
+        }
     """
     # chat-gpt
-    with action_lock_ref:
-        action_status_ref['action_status'] = 'think'
+    with action_state['lock']:
+        action_state['status_ref']['action_status'] = 'think'
 
-    response = get_gpt_response(user_input, openai_helper_obj, with_img_flag, 
-                                vilib_module, current_path_val)
+    response = get_gpt_response(
+        user_input, config['openai_helper'], config['with_img'],
+        config.get('vilib_module'), config.get('current_path')
+    )
 
     # actions & TTS
-    actions, answer, sound_actions = parse_gpt_response(response, sound_effect_actions)
+    actions, answer, sound_actions = parse_gpt_response(
+        response, config['sound_effect_actions']
+    )
 
     try:
         # ---- tts ----
-        tts_status = generate_tts(answer, openai_helper_obj, tts_dir_path, tts_voice,
-                                   volume_db, voice_instructions, tts_file_ref)
+        tts_status = generate_tts(
+            answer, config['openai_helper'], tts_config['dir_path'],
+            tts_config['voice'], tts_config['volume_db'],
+            tts_config['instructions'], speech_state['tts_file_ref']
+        )
 
         # ---- actions ----
-        execute_actions_and_sounds(actions, sound_actions, music_obj, action_lock_ref,
-                                  action_status_ref, actions_to_be_done_ref)
+        execute_actions_and_sounds(
+            actions, sound_actions, config['music'],
+            action_state['lock'], action_state['status_ref'],
+            action_state['actions_to_be_done_ref']
+        )
 
         if tts_status:
-            with speech_lock_ref:
-                speech_loaded_ref['speech_loaded'] = True
+            with speech_state['lock']:
+                speech_state['loaded_ref']['speech_loaded'] = True
 
         # ---- wait speak done ----
         if tts_status:
-            wait_for_speech_completion(speech_lock_ref, speech_loaded_ref)
+            wait_for_speech_completion(speech_state['lock'], speech_state['loaded_ref'])
 
         # ---- wait actions done ----
-        wait_for_actions_completion(action_lock_ref, action_status_ref)
+        wait_for_actions_completion(action_state['lock'], action_state['status_ref'])
 
         ##
         print() # new line
@@ -787,12 +843,33 @@ def main():
         if should_continue:
             continue
 
-        process_user_query(
-            user_input, openai_helper, with_img, vilib_module, current_path,
-            action_lock, action_status_ref, actions_to_be_done_ref, speech_lock,
-            speech_loaded_ref, tts_file_ref, music, tts_dir, TTS_VOICE, VOLUME_DB,
-            VOICE_INSTRUCTIONS, SOUND_EFFECT_ACTIONS
-        )
+        # Agrupar paràmetres en estructures de dades
+        config = {
+            'openai_helper': openai_helper,
+            'with_img': with_img,
+            'vilib_module': vilib_module,
+            'current_path': current_path,
+            'music': music,
+            'sound_effect_actions': SOUND_EFFECT_ACTIONS
+        }
+        action_state = {
+            'lock': action_lock,
+            'status_ref': action_status_ref,
+            'actions_to_be_done_ref': actions_to_be_done_ref
+        }
+        speech_state = {
+            'lock': speech_lock,
+            'loaded_ref': speech_loaded_ref,
+            'tts_file_ref': tts_file_ref
+        }
+        tts_config = {
+            'dir_path': tts_dir,
+            'voice': TTS_VOICE,
+            'volume_db': VOLUME_DB,
+            'instructions': VOICE_INSTRUCTIONS
+        }
+        
+        process_user_query(user_input, config, action_state, speech_state, tts_config)
         
         # Sincronitzar variables globals amb les referències
         with action_lock:
