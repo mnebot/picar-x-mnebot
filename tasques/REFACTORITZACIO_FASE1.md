@@ -365,3 +365,5 @@ canvi = (coordenada * ANGLE_SCALE_FACTOR / dimensio_camera) - ANGLE_OFFSET
 
 
 
+
+

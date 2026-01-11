@@ -347,3 +347,5 @@ cobreixen les funcionalitats més crítiques per al funcionament bàsic del robo
 
 
 
+
+

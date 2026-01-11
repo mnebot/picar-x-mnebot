@@ -417,3 +417,5 @@ i de baixa prioritat com a part de refactoritzacions generals.
 
 
 
+
+
