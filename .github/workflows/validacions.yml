@@ -9,10 +9,15 @@ on:
 
 permissions:
   pull-requests: read # allows SonarCloud to decorate PRs with analysis results
+  id-token: write # This is required for the tailscale action to request a JWT from GitHu
 
 jobs:
-  Analysis:
+  Desplegament:
+
     runs-on: ubuntu-latest
+
+    env:
+      DEPLOY_BRANCH: ${{ github.head_ref || github.ref_name }}
 
     steps:
       - name: Checkout code
@@ -37,9 +42,6 @@ jobs:
           pytest tests/ --cov=. --cov-report=xml:coverage.xml --cov-report=term || true
       
       - name: Analyze with SonarCloud
-
-        # You can pin the exact commit or the version.
-        # uses: SonarSource/sonarcloud-github-action@v2.2.0
         uses: SonarSource/sonarcloud-github-action@4006f663ecaf1f8093e8e4abb9227f6041f52216
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # Generate a token on Sonarcloud.io, add it to the secrets of this repo with the name SONAR_TOKEN (Settings > Secrets > Actions > add new repository secret)
@@ -53,3 +55,32 @@ jobs:
           # SonarCloud llegeix automàticament aquest fitxer.
           # S'analitza des de l'arrel amb exclusiones per fitxers no rellevants.
           projectBaseDir: .
+
+      - name: Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Desplegar codi al robot
+        uses: appleboy/ssh-action@v0.1.6
+
+        with:
+          host: ${{ secrets.PI_TAILSCALE_IP }}
+          username: ${{ secrets.PI_USER }}
+          password: ${{ secrets.PI_PASSWORD }}
+          envs: DEPLOY_BRANCH
+          script: |
+            set -e
+            echo "Desplegant branca: $DEPLOY_BRANCH"
+            cd /home/arnau/picar-x-mnebot
+            git fetch origin
+            git checkout "$DEPLOY_BRANCH" || git checkout -b "$DEPLOY_BRANCH" "origin/$DEPLOY_BRANCH"
+            git pull origin "$DEPLOY_BRANCH"
+            echo "Codi desplegat correctament a la branca $DEPLOY_BRANCH"
+            sudo cp picarx.service /etc/systemd/system/picarx.service
+            sudo systemctl daemon-reload
+            sudo systemctl restart picarx.service
+            sudo systemctl enable picarx.service
+            echo "Robot en execució"
