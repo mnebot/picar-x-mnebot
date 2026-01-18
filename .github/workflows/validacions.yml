@@ -83,7 +83,7 @@ jobs:
           host: ${{ secrets.PI_TAILSCALE_IP }}
           username: ${{ secrets.PI_USER }}
           password: ${{ secrets.PI_PASSWORD }}
-          source: "gpt_car.py,openai_helper.py,preset_actions.py,utils.py,visual_tracking.py,sounds/*,autostart.service"
+          source: "gpt_car.py,openai_helper.py,preset_actions.py,utils.py,visual_tracking.py,sounds/*,picarx.service"
           target: "~/picar-x-mnebot/"
 
       - name: Configurar servei i reiniciar
@@ -94,8 +94,8 @@ jobs:
           password: ${{ secrets.PI_PASSWORD }}
           script: |
             set -e
-            echo "Copiar autostart.service a /etc/systemd/system/"
-            sudo cp ~/picar-x-mnebot/autostart.service /etc/systemd/system/autostart.service
+            echo "Copiar fitxer de servei a /etc/systemd/system/"
+            sudo cp ~/picar-x-mnebot/picarx.service /etc/systemd/system/picarx.service
             sudo systemctl daemon-reload
             sudo systemctl restart picarx.service || echo "Servei picarx.service no trobat, continuant..."
             sudo systemctl enable picarx.service || echo "No s'ha pogut habilitar picarx.service, continuant..."
