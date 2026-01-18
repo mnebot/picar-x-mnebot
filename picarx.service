@@ -24,8 +24,12 @@ StandardError=journal
 TTYPath=/dev/null
 # Variables d'entorn necessàries
 Environment="PYTHONUNBUFFERED=1"
+# Variables d'entorn per a PulseAudio
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
+Environment="PULSE_RUNTIME_PATH=/run/user/1000/pulse"
+Environment="SDL_AUDIODRIVER=pulse"
 # Permetre accés a dispositius (per a la càmera i hardware)
-SupplementaryGroups=video gpio i2c
+SupplementaryGroups=video gpio i2c audio
 
 [Install]
 WantedBy=multi-user.target
