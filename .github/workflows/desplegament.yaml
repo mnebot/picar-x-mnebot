@@ -7,15 +7,43 @@ on:
       - completed
   workflow_dispatch:
 
+permissions:
+  id-token: write # This is required for the tailscale action to request a JWT from GitHub
 jobs:
   desplegament:
     runs-on: ubuntu-latest
-    # Si s'executa manualment (workflow_dispatch), sempre executar
-    # Si s'executa després de validacions (workflow_run), només si ha acabat amb èxit
-    # I només per push a main o pull requests a main
+
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.event == 'pull_request')) }}
     
-    steps:
-      - name: Hola
-        run: echo "hola"
+    env:
+      DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch }}
 
+    steps:
+
+      - name: Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Desplegar codi al robot
+        uses: appleboy/ssh-action@v0.1.6
+
+        with:
+          host: ${{ secrets.PI_TAILSCALE_IP }}
+          username: ${{ secrets.PI_USER }}
+          password: ${{ secrets.PI_PASSWORD }}
+          script: |
+            set -e
+            echo "Desplegant branca: $DEPLOY_BRANCH"
+            cd /home/arnau/picar-x-mnebot
+            git fetch origin
+            git checkout "$DEPLOY_BRANCH"
+            git pull origin "$DEPLOY_BRANCH"
+            echo "Codi desplegat correctament a la branca $DEPLOY_BRANCH"
+            sudo cp picarx.service /etc/systemd/system/picarx.service
+            sudo systemctl daemon-reload
+            sudo systemctl restart picarx.service
+            sudo systemctl enable picarx.service
+            echo "Robot en execució"

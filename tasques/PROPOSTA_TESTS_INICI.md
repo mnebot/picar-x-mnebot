@@ -346,3 +346,6 @@ Els següents tests NO estan inclosos però es podrien afegir en el futur:
 cobreixen les funcionalitats més crítiques per al funcionament bàsic del robot i FASE 1.
 
 
+
+
+

@@ -364,3 +364,6 @@ canvi = (coordenada * ANGLE_SCALE_FACTOR / dimensio_camera) - ANGLE_OFFSET
 - Totes les tasques mantenen la compatibilitat amb el codi existent i els tests
 
 
+
+
+

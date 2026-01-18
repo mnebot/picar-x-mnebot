@@ -1,0 +1,20 @@
+[Unit]
+Description=Arnau-X Robot Service
+# Assegurem que la xarxa i el so estiguin llestos
+After=network.target sound.target
+
+[Service]
+Type=simple
+User=arnau
+Group=arnau
+WorkingDirectory=/home/arnau/picar-x-mnebot/
+# Passant les variables d'entorn necessàries per al so
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=PULSE_RUNTIME_PATH=/run/user/1000/pulse
+# Execució directa sense caràcters de shell com &&
+ExecStart=/usr/bin/python3 /home/arnau/picar-x-mnebot/gpt_car.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

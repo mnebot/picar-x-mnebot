@@ -4,7 +4,12 @@ from preset_actions import actions_dict, sounds_dict
 from utils import gray_print, speak_block, sox_volume, redirect_error_2_null, cancel_redirect_error
 from visual_tracking import create_visual_tracking_handler
 
-import readline # optimize keyboard input, only need to import
+# readline només s'utilitza per optimitzar input de teclat, però pot fallar sense TTY
+try:
+    import readline  # optimize keyboard input, only need to import
+except (ImportError, OSError):
+    # Si readline no està disponible o no hi ha TTY, continuar sense ell
+    pass
 
 import speech_recognition as sr
 
@@ -18,6 +23,18 @@ import tempfile
 
 import os
 import sys
+
+# Forcem que os.getlogin retorni l'usuari correcte sense buscar un terminal
+try:
+    import pwd
+    def mocked_getlogin():
+        return pwd.getpwuid(os.getuid())[0]
+    os.getlogin = mocked_getlogin
+except (ImportError, OSError):
+    # Si pwd no està disponible (Windows), usar os.getenv('USER') o similar
+    def mocked_getlogin():
+        return os.getenv('USER', os.getenv('USERNAME', 'user'))
+    os.getlogin = mocked_getlogin
 
 os.environ['SDL_AUDIODRIVER'] = 'pulse' # PipeWire a Bookworm emula PulseAudio - necessary per a que raspberry pi 4 to work with sound
 
@@ -37,8 +54,16 @@ os.makedirs(tts_dir, mode=0o755, exist_ok=True)
 input_mode = None
 with_img = True
 args = sys.argv[1:]
+
+# Comprovar si hi ha TTY disponible
+has_tty = sys.stdin.isatty() if hasattr(sys.stdin, 'isatty') else False
+
 if '--keyboard' in args:
-    input_mode = 'keyboard'
+    if has_tty:
+        input_mode = 'keyboard'
+    else:
+        print('Warning: --keyboard especificat però no hi ha TTY disponible. Usant mode voice.')
+        input_mode = 'voice'
 else:
     input_mode = 'voice'
 
@@ -141,6 +166,154 @@ LED_BLINK_INTERVAL = 0.1 # seconds
 actions_to_be_done = []
 action_lock = threading.Lock()
 
+
+def update_led_status(new_status, last_status, last_led_time):
+    """
+    Actualitza l'estat del LED i retorna el nou temps si ha canviat.
+    
+    Returns:
+        tuple: (nou_led_time, nou_last_status)
+    """
+    if new_status != last_status:
+        return (0, new_status)
+    return (last_led_time, last_status)
+
+
+def handle_led_standby_blink(led_pin, current_time, last_led_time):
+    """
+    Gestiona el parpelleig doble del LED en estat standby.
+    
+    Returns:
+        float: Nou temps de LED després del parpelleig, o None si no s'ha fet
+    """
+    if current_time - last_led_time > LED_DOUBLE_BLINK_INTERVAL:
+        led_pin.off()
+        led_pin.on()
+        time.sleep(.1)
+        led_pin.off()
+        time.sleep(.1)
+        led_pin.on()
+        time.sleep(.1)
+        led_pin.off()
+        return current_time
+    return None
+
+
+def handle_led_think_blink(led_pin, current_time, last_led_time):
+    """
+    Gestiona el parpelleig del LED en estat think.
+    
+    Returns:
+        float: Nou temps de LED després del parpelleig, o None si no s'ha fet
+    """
+    if current_time - last_led_time > LED_BLINK_INTERVAL:
+        led_pin.off()
+        time.sleep(LED_BLINK_INTERVAL)
+        led_pin.on()
+        time.sleep(LED_BLINK_INTERVAL)
+        return current_time
+    return None
+
+
+def handle_led_actions(led_pin):
+    """Gestiona el LED en estat actions (encès constantment)."""
+    led_pin.on()
+
+
+def process_led_status(led_pin, led_status, last_led_status, last_led_time):
+    """
+    Processa l'estat del LED i actualitza el parpelleig segons l'estat.
+    
+    Returns:
+        tuple: (nou_last_led_time, nou_last_led_status)
+    """
+    current_time = time.time()
+    new_led_time, new_last_status = update_led_status(led_status, last_led_status, last_led_time)
+    
+    if led_status == 'standby':
+        updated_time = handle_led_standby_blink(led_pin, current_time, new_led_time)
+        if updated_time is not None:
+            return (updated_time, new_last_status)
+    elif led_status == 'think':
+        updated_time = handle_led_think_blink(led_pin, current_time, new_led_time)
+        if updated_time is not None:
+            return (updated_time, new_last_status)
+    elif led_status == 'actions':
+        handle_led_actions(led_pin)
+    
+    return (new_led_time, new_last_status)
+
+
+def handle_standby_state(last_action_time, action_interval):
+    """
+    Gestiona l'estat standby i retorna el nou interval d'acció si cal.
+    
+    Returns:
+        tuple: (nou_last_action_time, nou_action_interval, ha_canviat)
+    """
+    current_time = time.time()
+    if current_time - last_action_time > action_interval:
+        new_interval = random.randint(2, 6)
+        return (current_time, new_interval, True)
+    return (last_action_time, action_interval, False)
+
+
+def handle_think_state(last_action_status):
+    """
+    Gestiona l'estat think.
+    
+    Returns:
+        str: Nou estat d'acció
+    """
+    if last_action_status != 'think':
+        return 'think'
+    return last_action_status
+
+
+def execute_actions_list(actions_list, car, action_lock_ref, action_status_ref):
+    """
+    Executa una llista d'accions sobre el cotxe.
+    
+    Args:
+        actions_list: Llista d'accions a executar
+        car: Instància de Picarx
+        action_lock_ref: Referència al lock d'accions
+        action_status_ref: Referència a la variable action_status (per actualitzar-la)
+    """
+    for _action in actions_list:
+        try:
+            actions_dict[_action](car)
+        except Exception as e:
+            print(f'action error: {e}')
+        time.sleep(0.5)
+    
+    with action_lock_ref:
+        action_status_ref['action_status'] = 'actions_done'
+
+
+def handle_action_state(state, last_action_status, last_action_time, action_interval, 
+                        actions_to_be_done_ref, action_lock_ref, action_status_ref, car):
+    """
+    Gestiona l'estat de les accions segons l'estat actual.
+    
+    Returns:
+        tuple: (nou_last_action_status, nou_last_action_time, nou_action_interval)
+    """
+    if state == 'standby':
+        new_last_action_time, new_action_interval, _ = handle_standby_state(last_action_time, action_interval)
+        return ('standby', new_last_action_time, new_action_interval)
+    elif state == 'think':
+        new_last_action_status = handle_think_state(last_action_status)
+        return (new_last_action_status, last_action_time, action_interval)
+    elif state == 'actions':
+        with action_lock_ref:
+            _actions = actions_to_be_done_ref['actions_to_be_done']
+        execute_actions_list(_actions, car, action_lock_ref, action_status_ref)
+        return ('actions', time.time(), action_interval)
+    
+    return (last_action_status, last_action_time, action_interval)
+
+
 def action_handler():
     global action_status, actions_to_be_done, led_status, last_action_status, last_led_status
 
@@ -148,61 +321,30 @@ def action_handler():
     last_action_time = time.time()
     last_led_time = time.time()
 
+    # Crear referències mutables per poder actualitzar action_status des de funcions
+    action_status_ref = {'action_status': action_status}
+    actions_to_be_done_ref = {'actions_to_be_done': actions_to_be_done}
+
     while True:
         with action_lock:
             _state = action_status
+            action_status_ref['action_status'] = action_status
 
         # led
         led_status = _state
-
-        if led_status != last_led_status:
-            last_led_time = 0
-            last_led_status = led_status
-
-        if led_status == 'standby':
-            if time.time() - last_led_time > LED_DOUBLE_BLINK_INTERVAL:
-                led.off()
-                led.on()
-                sleep(.1)
-                led.off()
-                sleep(.1)
-                led.on()
-                sleep(.1)
-                led.off()
-                last_led_time = time.time()
-        elif led_status == 'think':
-            if time.time() - last_led_time > LED_BLINK_INTERVAL:
-                led.off()
-                sleep(LED_BLINK_INTERVAL)
-                led.on()
-                sleep(LED_BLINK_INTERVAL)
-                last_led_time = time.time()
-        elif led_status == 'actions':
-                led.on() 
+        last_led_time, last_led_status = process_led_status(
+            led, led_status, last_led_status, last_led_time
+        )
 
         # actions
-        if _state == 'standby':
-            last_action_status = 'standby'
-            if time.time() - last_action_time > action_interval:
-                last_action_time = time.time()
-                action_interval = random.randint(2, 6)
-        elif _state == 'think':
-            if last_action_status != 'think':
-                last_action_status = 'think'
-        elif _state == 'actions':
-            last_action_status = 'actions'
-            with action_lock:
-                _actions = actions_to_be_done
-            for _action in _actions:
-                try:
-                    actions_dict[_action](my_car)
-                except Exception as e:
-                    print(f'action error: {e}')
-                time.sleep(0.5)
-
-            with action_lock:
-                action_status = 'actions_done'
-            last_action_time = time.time()
+        last_action_status, last_action_time, action_interval = handle_action_state(
+            _state, last_action_status, last_action_time, action_interval,
+            actions_to_be_done_ref, action_lock, action_status_ref, my_car
+        )
+        
+        # Sincronitzar action_status global amb la referència
+        with action_lock:
+            action_status = action_status_ref['action_status']
 
         time.sleep(0.01)
 
@@ -288,12 +430,390 @@ visual_tracking_thread = threading.Thread(target=visual_tracking_handler)
 visual_tracking_thread.daemon = True
 
 
+# Funcions auxiliars per a main()
+
+
+def reset_camera_if_needed(car, with_img_flag):
+    """
+    Reseteja la càmera si no hi ha seguiment visual actiu.
+    
+    Args:
+        car: Instància de Picarx
+        with_img_flag: Si hi ha imatge disponible
+    """
+    if not with_img_flag:
+        car.set_cam_pan_angle(DEFAULT_HEAD_PAN)
+        car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
+
+
+def get_voice_input(recognizer_obj, openai_helper_obj, language, action_lock_ref, action_status_ref, car, with_img_flag):
+    """
+    Obté input de veu mitjançant el micròfon i STT.
+    
+    Returns:
+        str: Text reconegut, o None si no s'ha pogut obtenir
+    """
+    # No resetar càmera si el seguiment visual està actiu
+    # El seguiment visual controla els angles de la càmera contínuament
+    reset_camera_if_needed(car, with_img_flag)
+
+    # listen
+    gray_print("listening ...")
+
+    with action_lock_ref:
+        action_status_ref['action_status'] = 'standby'
+
+    _stderr_back = redirect_error_2_null() # ignore error print to ignore ALSA errors
+    # If the chunk_size is set too small (default_size=1024), it may cause the program to freeze
+    with sr.Microphone(chunk_size=8192) as source:
+        cancel_redirect_error(_stderr_back) # restore error print
+        recognizer_obj.adjust_for_ambient_noise(source)
+        audio = recognizer_obj.listen(source)
+
+    # stt
+    gray_print('stt ...')
+    st = time.time()
+    _result = openai_helper_obj.stt(audio, language=language)
+    gray_print(f"stt takes: {time.time() - st:.3f} s")
+
+    if not _result or _result == "":
+        return None
+    return _result
+
+
+def get_keyboard_input(action_lock_ref, action_status_ref, car, with_img_flag):
+    """
+    Obté input de teclat.
+    
+    Returns:
+        tuple: (text_input, should_continue, input_mode_changed)
+        - text_input: Text introduït, o None si està buit
+        - should_continue: Si cal continuar el bucle
+        - input_mode_changed: Si s'ha canviat el mode d'input
+    """
+    # No resetar càmera si el seguiment visual està actiu
+    # El seguiment visual controla els angles de la càmera contínuament
+    reset_camera_if_needed(car, with_img_flag)
+
+    with action_lock_ref:
+        action_status_ref['action_status'] = 'standby'
+
+    try:
+        _result = input(f'\033[1;30m{"input: "}\033[0m').encode(sys.stdin.encoding).decode('utf-8')
+    except (EOFError, OSError) as e:
+        # Si no hi ha TTY disponible, canviar a mode voice
+        print(f'Error: No TTY disponible per input de teclat: {e}')
+        print('Canviant a mode voice...')
+        return (None, True, True)
+
+    if not _result or _result == "":
+        return (None, True, False)
+    
+    return (_result, False, False)
+
+
+def get_user_input(input_mode_val, recognizer_obj, openai_helper_obj, language, 
+                   action_lock_ref, action_status_ref, car, with_img_flag):
+    """
+    Obté input de l'usuari segons el mode (voice o keyboard).
+    
+    Returns:
+        tuple: (text_input, should_continue, input_mode_changed, new_input_mode)
+    """
+    if input_mode_val == 'voice':
+        result = get_voice_input(recognizer_obj, openai_helper_obj, language, 
+                                action_lock_ref, action_status_ref, car, with_img_flag)
+        if result is None:
+            return (None, True, False, input_mode_val)
+        return (result, False, False, input_mode_val)
+    elif input_mode_val == 'keyboard':
+        result, should_continue, input_mode_changed = get_keyboard_input(
+            action_lock_ref, action_status_ref, car, with_img_flag
+        )
+        new_mode = 'voice' if input_mode_changed else input_mode_val
+        return (result, should_continue, input_mode_changed, new_mode)
+    else:
+        raise ValueError("Invalid input mode")
+
+
+def capture_image(current_path_val, vilib_module=None):
+    """
+    Captura una imatge de la càmera i la guarda a un fitxer.
+    
+    Returns:
+        str: Ruta al fitxer d'imatge, o None si no s'ha pogut capturar
+    """
+    if vilib_module is None:
+        return None
+    
+    img_path = os.path.join(current_path_val, 'img_input.jpg')
+    try:
+        # Validar que Vilib.img existeixi i sigui vàlid abans d'escriure
+        if not hasattr(vilib_module, 'img') or vilib_module.img is None:
+            raise ValueError("Vilib.img no està disponible")
+        cv2.imwrite(img_path, vilib_module.img)
+        return img_path
+    except (ValueError, AttributeError, Exception) as e:
+        print(f'Warning: Could not write image file: {e}')
+        # Try alternative location
+        try:
+            img_path = os.path.join(tempfile.gettempdir(), 'img_input.jpg')
+            if hasattr(vilib_module, 'img') and vilib_module.img is not None:
+                cv2.imwrite(img_path, vilib_module.img)
+                return img_path
+            else:
+                print('Warning: Vilib.img no disponible, continuant sense imatge')
+                return None
+        except Exception as e2:
+            print(f'Warning: Could not write image to temp directory: {e2}')
+            return None
+
+
+def get_gpt_response(user_input, openai_helper_obj, with_img_flag, vilib_module=None, 
+                     current_path_val=None):
+    """
+    Obté la resposta de GPT per a l'input de l'usuari.
+    
+    Returns:
+        dict: Resposta de GPT
+    """
+    gray_print(f'thinking ...')
+    st = time.time()
+
+    if with_img_flag:
+        img_path = capture_image(current_path_val, vilib_module)
+        
+        # Només usar imatge si s'ha pogut crear correctament
+        if img_path:
+            response = openai_helper_obj.dialogue_with_img(user_input, img_path)
+        else:
+            # Fallback a diàleg sense imatge si no es pot obtenir la imatge
+            print('Warning: Continuant sense imatge degut a errors previs')
+            response = openai_helper_obj.dialogue(user_input)
+    else:
+        response = openai_helper_obj.dialogue(user_input)
+
+    gray_print(f'chat takes: {time.time() - st:.3f} s')
+    return response
+
+
+def _extract_actions_from_dict(response_dict):
+    """Extreu les accions d'un diccionari de resposta."""
+    if 'actions' in response_dict:
+        return list(response_dict['actions'])
+    return ['stop']
+
+
+def _extract_answer_from_dict(response_dict):
+    """Extreu la resposta d'un diccionari de resposta."""
+    return response_dict.get('answer', '')
+
+
+def _separate_sound_actions(actions, answer, sound_effect_actions):
+    """
+    Separa les accions que són efectes de so de les accions normals.
+    
+    Returns:
+        tuple: (filtered_actions, sound_actions)
+    """
+    if not answer:
+        return actions, []
+    
+    sound_actions = []
+    filtered_actions = []
+    
+    for action in actions:
+        if action in sound_effect_actions:
+            sound_actions.append(action)
+        else:
+            filtered_actions.append(action)
+    
+    return filtered_actions, sound_actions
+
+
+def _parse_dict_response(response_dict, sound_effect_actions):
+    """Processa una resposta que és un diccionari."""
+    actions = _extract_actions_from_dict(response_dict)
+    answer = _extract_answer_from_dict(response_dict)
+    actions, sound_actions = _separate_sound_actions(actions, answer, sound_effect_actions)
+    return actions, answer, sound_actions
+
+
+def _parse_string_response(response):
+    """Processa una resposta que és un string."""
+    response_str = str(response)
+    if response_str:
+        return [], response_str, []
+    return [], '', []
+
+
+def parse_gpt_response(response, sound_effect_actions):
+    """
+    Parseja la resposta de GPT i extreu accions, resposta i efectes de so.
+    
+    Returns:
+        tuple: (actions, answer, sound_actions)
+    """
+    try:
+        if isinstance(response, dict):
+            return _parse_dict_response(response, sound_effect_actions)
+        else:
+            return _parse_string_response(response)
+    except Exception as e:
+        print(f'Warning: Error processant resposta de GPT: {e}')
+        return [], '', []
+
+
+def generate_tts(answer, openai_helper_obj, tts_dir_path, tts_voice, volume_db, 
+                 voice_instructions, tts_file_ref):
+    """
+    Genera TTS per a una resposta.
+    
+    Returns:
+        bool: True si s'ha generat correctament, False altrament
+    """
+    if answer == '':
+        return False
+    
+    st = time.time()
+    _time = time.strftime("%y-%m-%d_%H-%M-%S", time.localtime())
+    _tts_f = os.path.join(tts_dir_path, f"{_time}_raw.wav")
+    _tts_status = openai_helper_obj.text_to_speech(
+        answer, _tts_f, tts_voice, response_format='wav', instructions=voice_instructions
+    )
+    if _tts_status:
+        tts_file_ref['tts_file'] = os.path.join(tts_dir_path, f"{_time}_{volume_db}dB.wav")
+        _tts_status = sox_volume(_tts_f, tts_file_ref['tts_file'], volume_db)
+    gray_print(f'tts takes: {time.time() - st:.3f} s')
+    return _tts_status
+
+
+def execute_actions_and_sounds(actions_list, sound_actions_list, music_obj, 
+                               action_lock_ref, action_status_ref, actions_to_be_done_ref):
+    """
+    Executa les accions i els efectes de so.
+    """
+    # ---- actions ----
+    with action_lock_ref:
+        actions_to_be_done_ref['actions_to_be_done'] = actions_list
+        gray_print(f'actions: {actions_list}')
+        action_status_ref['action_status'] = 'actions'
+
+    # --- sound effects and voice ---
+    for _sound in sound_actions_list:
+        try:
+            sounds_dict[_sound](music_obj)
+        except Exception as e:
+            print(f'action error: {e}')
+
+
+def wait_for_speech_completion(speech_lock_ref, speech_loaded_ref):
+    """
+    Espera que acabi la reproducció de veu.
+    """
+    while True:
+        with speech_lock_ref:
+            if not speech_loaded_ref['speech_loaded']:
+                break
+        time.sleep(.01)
+
+
+def wait_for_actions_completion(action_lock_ref, action_status_ref):
+    """
+    Espera que acabin les accions.
+    """
+    while True:
+        with action_lock_ref:
+            if action_status_ref['action_status'] != 'actions':
+                break
+        time.sleep(.01)
+
+
+def process_user_query(user_input, config, action_state, speech_state, tts_config):
+    """
+    Processa una consulta de l'usuari: obté resposta de GPT, genera TTS i executa accions.
+    
+    Args:
+        user_input: Text de l'usuari
+        config: Diccionari amb configuració {
+            'openai_helper': OpenAiHelper instance,
+            'with_img': bool,
+            'vilib_module': Vilib module o None,
+            'current_path': str,
+            'music': Music instance,
+            'sound_effect_actions': list
+        }
+        action_state: Diccionari amb estat d'accions {
+            'lock': threading.Lock,
+            'status_ref': dict amb 'action_status',
+            'actions_to_be_done_ref': dict amb 'actions_to_be_done'
+        }
+        speech_state: Diccionari amb estat de veu {
+            'lock': threading.Lock,
+            'loaded_ref': dict amb 'speech_loaded',
+            'tts_file_ref': dict amb 'tts_file'
+        }
+        tts_config: Diccionari amb configuració TTS {
+            'dir_path': str,
+            'voice': str,
+            'volume_db': int/float,
+            'instructions': str
+        }
+    """
+    # chat-gpt
+    with action_state['lock']:
+        action_state['status_ref']['action_status'] = 'think'
+
+    response = get_gpt_response(
+        user_input, config['openai_helper'], config['with_img'],
+        config.get('vilib_module'), config.get('current_path')
+    )
+
+    # actions & TTS
+    actions, answer, sound_actions = parse_gpt_response(
+        response, config['sound_effect_actions']
+    )
+
+    try:
+        # ---- tts ----
+        tts_status = generate_tts(
+            answer, config['openai_helper'], tts_config['dir_path'],
+            tts_config['voice'], tts_config['volume_db'],
+            tts_config['instructions'], speech_state['tts_file_ref']
+        )
+
+        # ---- actions ----
+        execute_actions_and_sounds(
+            actions, sound_actions, config['music'],
+            action_state['lock'], action_state['status_ref'],
+            action_state['actions_to_be_done_ref']
+        )
+
+        if tts_status:
+            with speech_state['lock']:
+                speech_state['loaded_ref']['speech_loaded'] = True
+
+        # ---- wait speak done ----
+        if tts_status:
+            wait_for_speech_completion(speech_state['lock'], speech_state['loaded_ref'])
+
+        # ---- wait actions done ----
+        wait_for_actions_completion(action_state['lock'], action_state['status_ref'])
+
+        ##
+        print() # new line
+
+    except Exception as e:
+        print(f'actions or TTS error: {e}')
+
+
 # main
 def main():
     global current_feeling, last_feeling
     global speech_loaded
     global action_status, actions_to_be_done
     global tts_file, tts_dir
+    global input_mode
 
     my_car.reset()
     my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
@@ -304,179 +824,60 @@ def main():
         # person_detection_thread.start()  # Desactivat: no dir "Hola" automàticament
         visual_tracking_thread.start()  # Iniciar seguiment visual pur (FASE 1, PAS 1)
 
+    # Crear referències mutables per poder actualitzar variables des de funcions
+    action_status_ref = {'action_status': action_status}
+    actions_to_be_done_ref = {'actions_to_be_done': actions_to_be_done}
+    speech_loaded_ref = {'speech_loaded': speech_loaded}
+    tts_file_ref = {'tts_file': tts_file}
+    vilib_module = Vilib if with_img and 'Vilib' in globals() else None
+
     while True:
-        if input_mode == 'voice':
-            # No resetar càmera si el seguiment visual està actiu
-            # El seguiment visual controla els angles de la càmera contínuament
-            if not with_img:
-                my_car.set_cam_pan_angle(DEFAULT_HEAD_PAN)
-                my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
+        user_input, should_continue, input_mode_changed, new_input_mode = get_user_input(
+            input_mode, recognizer, openai_helper, LANGUAGE, action_lock, action_status_ref,
+            my_car, with_img
+        )
+        
+        if input_mode_changed:
+            input_mode = new_input_mode
+        
+        if should_continue:
+            continue
 
-            # listen
-            gray_print("listening ...")
-
-            with action_lock:
-                action_status = 'standby'
-
-            _stderr_back = redirect_error_2_null() # ignore error print to ignore ALSA errors
-            # If the chunk_size is set too small (default_size=1024), it may cause the program to freeze
-            with sr.Microphone(chunk_size=8192) as source:
-                cancel_redirect_error(_stderr_back) # restore error print
-                recognizer.adjust_for_ambient_noise(source)
-                audio = recognizer.listen(source)
-
-            # stt
-            gray_print('stt ...')
-            st = time.time()
-            _result = openai_helper.stt(audio, language=LANGUAGE)
-            gray_print(f"stt takes: {time.time() - st:.3f} s")
-
-            if not _result or _result == "":
-                print() # new line
-                continue
-
-        elif input_mode == 'keyboard':
-            # No resetar càmera si el seguiment visual està actiu
-            # El seguiment visual controla els angles de la càmera contínuament
-            if not with_img:
-                my_car.set_cam_tilt_angle(DEFAULT_HEAD_TILT)
-
-            with action_lock:
-                action_status = 'standby'
-
-            _result = input(f'\033[1;30m{"input: "}\033[0m').encode(sys.stdin.encoding).decode('utf-8')
-
-            if not _result or _result == "":
-                print() # new line
-                continue
-
-        else:
-            raise ValueError("Invalid input mode")
-
-        # chat-gpt
-        gray_print(f'thinking ...')
-        response = {}
-        st = time.time()
-
+        # Agrupar paràmetres en estructures de dades
+        config = {
+            'openai_helper': openai_helper,
+            'with_img': with_img,
+            'vilib_module': vilib_module,
+            'current_path': current_path,
+            'music': music,
+            'sound_effect_actions': SOUND_EFFECT_ACTIONS
+        }
+        action_state = {
+            'lock': action_lock,
+            'status_ref': action_status_ref,
+            'actions_to_be_done_ref': actions_to_be_done_ref
+        }
+        speech_state = {
+            'lock': speech_lock,
+            'loaded_ref': speech_loaded_ref,
+            'tts_file_ref': tts_file_ref
+        }
+        tts_config = {
+            'dir_path': tts_dir,
+            'voice': TTS_VOICE,
+            'volume_db': VOLUME_DB,
+            'instructions': VOICE_INSTRUCTIONS
+        }
+        
+        process_user_query(user_input, config, action_state, speech_state, tts_config)
+        
+        # Sincronitzar variables globals amb les referències
         with action_lock:
-            action_status = 'think'
-
-        if with_img:
-            img_path = os.path.join(current_path, 'img_input.jpg')
-            try:
-                # Validar que Vilib.img existeixi i sigui vàlid abans d'escriure
-                if not hasattr(Vilib, 'img') or Vilib.img is None:
-                    raise ValueError("Vilib.img no està disponible")
-                cv2.imwrite(img_path, Vilib.img)
-            except (cv2.error, ValueError, AttributeError) as e:
-                print(f'Warning: Could not write image file: {e}')
-                # Try alternative location
-                try:
-                    img_path = os.path.join(tempfile.gettempdir(), 'img_input.jpg')
-                    if hasattr(Vilib, 'img') and Vilib.img is not None:
-                        cv2.imwrite(img_path, Vilib.img)
-                    else:
-                        print('Warning: Vilib.img no disponible, continuant sense imatge')
-                        img_path = None
-                except Exception as e2:
-                    print(f'Warning: Could not write image to temp directory: {e2}')
-                    img_path = None
-            
-            # Només usar imatge si s'ha pogut crear correctament
-            if img_path:
-                response = openai_helper.dialogue_with_img(_result, img_path)
-            else:
-                # Fallback a diàleg sense imatge si no es pot obtenir la imatge
-                print('Warning: Continuant sense imatge degut a errors previs')
-                response = openai_helper.dialogue(_result)
-        else:
-            response = openai_helper.dialogue(_result)
-
-        gray_print(f'chat takes: {time.time() - st:.3f} s')
-
-        # actions & TTS
-        _sound_actions = [] 
-        try:
-            if isinstance(response, dict):
-                if 'actions' in response:
-                    actions = list(response['actions'])
-                else:
-                    actions = ['stop']
-
-                if 'answer' in response:
-                    answer = response['answer']
-                else:
-                    answer = ''
-
-                if len(answer) > 0:
-                    _actions = actions.copy()
-                    for _action in _actions:
-                        if _action in SOUND_EFFECT_ACTIONS:
-                            _sound_actions.append(_action)
-                            actions.remove(_action)
-
-            else:
-                response = str(response)
-                if len(response) > 0:
-                    actions = []
-                    answer = response
-
-        except Exception as e:
-            # Capturar excepcions específiques en lloc de genèriques
-            print(f'Warning: Error processant resposta de GPT: {e}')
-            actions = []
-            answer = ''
-    
-        try:
-            # ---- tts ----
-            _tts_status = False
-            if answer != '':
-                st = time.time()
-                _time = time.strftime("%y-%m-%d_%H-%M-%S", time.localtime())
-                _tts_f = os.path.join(tts_dir, f"{_time}_raw.wav")
-                _tts_status = openai_helper.text_to_speech(answer, _tts_f, TTS_VOICE, response_format='wav', instructions=VOICE_INSTRUCTIONS) # alloy, echo, fable, onyx, nova, and shimmer
-                if _tts_status:
-                    tts_file = os.path.join(tts_dir, f"{_time}_{VOLUME_DB}dB.wav")
-                    _tts_status = sox_volume(_tts_f, tts_file, VOLUME_DB)
-                gray_print(f'tts takes: {time.time() - st:.3f} s')
-
-            # ---- actions ----
-            with action_lock:
-                actions_to_be_done = actions
-                gray_print(f'actions: {actions_to_be_done}')
-                action_status = 'actions'
-
-            # --- sound effects and voice ---
-            for _sound in _sound_actions:
-                try:
-                    sounds_dict[_sound](music)
-                except Exception as e:
-                    print(f'action error: {e}')
-
-            if _tts_status:
-                with speech_lock:
-                    speech_loaded = True
-
-            # ---- wait speak done ----
-            if _tts_status:
-                while True:
-                    with speech_lock:
-                        if not speech_loaded:
-                            break
-                    time.sleep(.01)
-
-            # ---- wait actions done ----
-            while True:
-                with action_lock:
-                    if action_status != 'actions':
-                        break
-                time.sleep(.01)
-
-            ##
-            print() # new line
-
-        except Exception as e:
-            print(f'actions or TTS error: {e}')
+            action_status = action_status_ref['action_status']
+            actions_to_be_done = actions_to_be_done_ref['actions_to_be_done']
+        with speech_lock:
+            speech_loaded = speech_loaded_ref['speech_loaded']
+        tts_file = tts_file_ref['tts_file']
 
 
 if __name__ == "__main__":
