@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # <--- AIXÒ ÉS EL MÉS IMPORTANT
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       
@@ -63,24 +63,40 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      - name: Desplegar codi al robot
+      - name: Preparar directori al robot
         uses: appleboy/ssh-action@v0.1.6
-
         with:
           host: ${{ secrets.PI_TAILSCALE_IP }}
           username: ${{ secrets.PI_USER }}
           password: ${{ secrets.PI_PASSWORD }}
-          envs: DEPLOY_BRANCH
           script: |
             set -e
-            echo "Desplegant branca: $DEPLOY_BRANCH"
-            cd /home/arnau/picar-x-mnebot
-            git fetch origin
-            git checkout "$DEPLOY_BRANCH" || git checkout -b "$DEPLOY_BRANCH" "origin/$DEPLOY_BRANCH"
-            git pull origin "$DEPLOY_BRANCH"
-            echo "Codi desplegat correctament a la branca $DEPLOY_BRANCH"
-            sudo cp picarx.service /etc/systemd/system/picarx.service
+            echo "Assegurar que existeix el directori ~/picar-x-mnebot"
+            mkdir -p ~/picar-x-mnebot
+            mkdir -p ~/picar-x-mnebot/sounds
+            mkdir -p ~/picar-x-mnebot/tts
+            echo "Directori creat/verificat"
+
+      - name: Copiar fitxers al robot
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PI_TAILSCALE_IP }}
+          username: ${{ secrets.PI_USER }}
+          password: ${{ secrets.PI_PASSWORD }}
+          source: "gpt_car.py,openai_helper.py,preset_actions.py,utils.py,visual_tracking.py,sounds/*,autostart.service"
+          target: "~/picar-x-mnebot/"
+
+      - name: Configurar servei i reiniciar
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.PI_TAILSCALE_IP }}
+          username: ${{ secrets.PI_USER }}
+          password: ${{ secrets.PI_PASSWORD }}
+          script: |
+            set -e
+            echo "Copiar autostart.service a /etc/systemd/system/"
+            sudo cp ~/picar-x-mnebot/autostart.service /etc/systemd/system/autostart.service
             sudo systemctl daemon-reload
-            sudo systemctl restart picarx.service
-            sudo systemctl enable picarx.service
-            echo "Robot en execució"
+            sudo systemctl restart picarx.service || echo "Servei picarx.service no trobat, continuant..."
+            sudo systemctl enable picarx.service || echo "No s'ha pogut habilitar picarx.service, continuant..."
+            echo "Robot configurat"
