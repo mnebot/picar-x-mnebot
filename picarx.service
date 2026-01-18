@@ -1,7 +1,7 @@
 # https://www.freedesktop.org/software/systemd/man/systemd.service.html
 [Unit]
 Description=Picar-X Robot Service
-After=multi-user.target network.target
+After=multi-user.target network.target sound.target
 Wants=network.target
 
 [Service]
@@ -14,7 +14,9 @@ Type=simple
 User=arnau
 Group=arnau
 WorkingDirectory=/home/arnau/picar-x-mnebot
-ExecStart=/usr/bin/python3 /home/arnau/picar-x-mnebot/gpt_car.py
+# Configurar variables d'entorn per a PulseAudio dinàmicament
+# Usar bash per poder executar id -u correctament
+ExecStart=/bin/bash -c 'export XDG_RUNTIME_DIR=/run/user/$$(id -u); export PULSE_RUNTIME_PATH=/run/user/$$(id -u)/pulse; export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$$(id -u)/bus; exec /usr/bin/python3 /home/arnau/picar-x-mnebot/gpt_car.py'
 Restart=always
 RestartSec=10
 StandardInput=null
@@ -24,9 +26,6 @@ StandardError=journal
 TTYPath=/dev/null
 # Variables d'entorn necessàries
 Environment="PYTHONUNBUFFERED=1"
-# Variables d'entorn per a PulseAudio
-Environment="XDG_RUNTIME_DIR=/run/user/1000"
-Environment="PULSE_RUNTIME_PATH=/run/user/1000/pulse"
 Environment="SDL_AUDIODRIVER=pulse"
 # Permetre accés a dispositius (per a la càmera i hardware)
 SupplementaryGroups=video gpio i2c audio
