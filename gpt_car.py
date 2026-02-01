@@ -804,9 +804,11 @@ def process_user_query(user_input, config, action_state, speech_state, tts_confi
         # ---- wait speak done ----
         if tts_status:
             wait_for_speech_completion(speech_state['lock'], speech_state['loaded_ref'])
+            gray_print("[debug] process: speech done, continuing")
 
         # ---- wait actions done ----
         wait_for_actions_completion(action_state['lock'], action_state['status_ref'])
+        gray_print("[debug] process: actions done, continuing")
 
         ##
         print() # new line
