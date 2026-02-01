@@ -82,11 +82,19 @@ def speak_block(music, name, volume=100):
     is_run_with_root = (os.geteuid() == 0)
     if not is_run_with_root and not speak_first:
         speak_first = True
-        warn("Play sound needs to be run with sudo.")
-    _status, _ = run_command('sudo killall pulseaudio') # Solve the problem that there is no sound when running in the vnc environment
-    
+        # Running as normal user is fine with PulseAudio/PipeWire (e.g. systemd service).
+        gray_print("Playing audio as non-root (PulseAudio/PipeWire).")
+    # No fer killall pulseaudio quan s'usa PipeWire o com a servei systemd: pot tallar
+    # el servidor de so i fer que la reproducció es quedi penjada. Només útil en entorn VNC.
+    # _status, _ = run_command('sudo killall pulseaudio')
+
     if os.path.isfile(name):
-        music.sound_play(name, volume)
+        gray_print(f"[debug] speak_block: sound_play start {name}")
+        try:
+            music.sound_play(name, volume)
+            gray_print("[debug] speak_block: sound_play done")
+        except Exception as e:
+            warn(f"[debug] speak_block: sound_play error: {e}")
     else:
         warn(f'No sound found for {name}')
         return False

@@ -113,7 +113,7 @@ DEFAULT_HEAD_TILT = 20
 if with_img:
     from vilib import Vilib
     import cv2
-
+    os.environ['FLASK_CHDIR'] = current_path
     Vilib.camera_start(vflip=False,hflip=False)
     Vilib.show_fps()
     Vilib.display(local=False,web=True)
@@ -136,6 +136,8 @@ recognizer.dynamic_energy_ratio = 1.6
 speech_loaded = False
 speech_lock = threading.Lock()
 tts_file = None
+# Ref compartida per sincronitzar speak_handler amb wait_for_speech_completion (el bucle principal escriu als refs, el speak_handler llegeix les globals i actualitza el ref quan acaba)
+_speech_loaded_ref = None
 
 def speak_hanlder():
     global speech_loaded, tts_file
@@ -148,6 +150,8 @@ def speak_hanlder():
             # gray_print('speak done')
             with speech_lock:
                 speech_loaded = False
+                if _speech_loaded_ref is not None:
+                    _speech_loaded_ref['speech_loaded'] = False
         time.sleep(0.05)
 
 speak_thread = threading.Thread(target=speak_hanlder)
@@ -165,6 +169,10 @@ LED_BLINK_INTERVAL = 0.1 # seconds
 
 actions_to_be_done = []
 action_lock = threading.Lock()
+# Referències compartides entre main() i action_handler(); el fil principal escriu 'actions'
+# i el fil d'accions escriu 'actions_done' quan acaba.
+action_status_ref = {'action_status': 'standby'}
+actions_to_be_done_ref = {'actions_to_be_done': []}
 
 
 def update_led_status(new_status, last_status, last_led_time):
@@ -316,19 +324,16 @@ def handle_action_state(state, last_action_status, last_action_time, action_inte
 
 def action_handler():
     global action_status, actions_to_be_done, led_status, last_action_status, last_led_status
+    global action_status_ref, actions_to_be_done_ref
 
     action_interval = 5 # seconds
     last_action_time = time.time()
     last_led_time = time.time()
 
-    # Crear referències mutables per poder actualitzar action_status des de funcions
-    action_status_ref = {'action_status': action_status}
-    actions_to_be_done_ref = {'actions_to_be_done': actions_to_be_done}
-
     while True:
         with action_lock:
-            _state = action_status
-            action_status_ref['action_status'] = action_status
+            _state = action_status_ref['action_status']
+            action_status = _state
 
         # led
         led_status = _state
@@ -342,9 +347,10 @@ def action_handler():
             actions_to_be_done_ref, action_lock, action_status_ref, my_car
         )
         
-        # Sincronitzar action_status global amb la referència
+        # Sincronitzar variable global per a get_user_input, etc.
         with action_lock:
             action_status = action_status_ref['action_status']
+            actions_to_be_done = actions_to_be_done_ref['actions_to_be_done']
 
         time.sleep(0.01)
 
@@ -465,7 +471,7 @@ def get_voice_input(recognizer_obj, openai_helper_obj, language, action_lock_ref
 
     _stderr_back = redirect_error_2_null() # ignore error print to ignore ALSA errors
     # If the chunk_size is set too small (default_size=1024), it may cause the program to freeze
-    with sr.Microphone(chunk_size=8192) as source:
+    with sr.Microphone(chunk_size=4096) as source:
         cancel_redirect_error(_stderr_back) # restore error print
         recognizer_obj.adjust_for_ambient_noise(source)
         audio = recognizer_obj.listen(source)
@@ -792,13 +798,19 @@ def process_user_query(user_input, config, action_state, speech_state, tts_confi
         if tts_status:
             with speech_state['lock']:
                 speech_state['loaded_ref']['speech_loaded'] = True
+            # Sincronitzar globals perquè speak_handler les llegeixi i reprodueixi
+            global speech_loaded, tts_file
+            speech_loaded = True
+            tts_file = speech_state['tts_file_ref']['tts_file']
 
         # ---- wait speak done ----
         if tts_status:
             wait_for_speech_completion(speech_state['lock'], speech_state['loaded_ref'])
+            gray_print("[debug] process: speech done, continuing")
 
         # ---- wait actions done ----
         wait_for_actions_completion(action_state['lock'], action_state['status_ref'])
+        gray_print("[debug] process: actions done, continuing")
 
         ##
         print() # new line
@@ -812,6 +824,7 @@ def main():
     global current_feeling, last_feeling
     global speech_loaded
     global action_status, actions_to_be_done
+    global action_status_ref, actions_to_be_done_ref
     global tts_file, tts_dir
     global input_mode
 
@@ -824,11 +837,13 @@ def main():
         # person_detection_thread.start()  # Desactivat: no dir "Hola" automàticament
         visual_tracking_thread.start()  # Iniciar seguiment visual pur (FASE 1, PAS 1)
 
-    # Crear referències mutables per poder actualitzar variables des de funcions
-    action_status_ref = {'action_status': action_status}
-    actions_to_be_done_ref = {'actions_to_be_done': actions_to_be_done}
+    # Sincronitzar refs compartides amb el fil d'accions
+    action_status_ref['action_status'] = action_status
+    actions_to_be_done_ref['actions_to_be_done'] = actions_to_be_done
     speech_loaded_ref = {'speech_loaded': speech_loaded}
     tts_file_ref = {'tts_file': tts_file}
+    global _speech_loaded_ref
+    _speech_loaded_ref = speech_loaded_ref
     vilib_module = Vilib if with_img and 'Vilib' in globals() else None
 
     while True:

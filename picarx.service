@@ -7,11 +7,22 @@ After=network.target sound.target
 Type=simple
 User=arnau
 Group=arnau
+# No cal SupplementaryGroups: l'usuari arnau ja és membre de audio, pulse, pulse-access, video, gpio, i2c, input (veure /etc/group). Evita l'error 216/GROUP en alguns systemd.
 WorkingDirectory=/home/arnau/picar-x-mnebot/
 # Passant les variables d'entorn necessàries per al so
+Environment=PYTHONPATH=/home/arnau/picar-x-mnebot
+Environment=PYTHONUNBUFFERED=1
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=PULSE_SERVER=unix:/run/user/1000/pulse/native
+Environment=PULSE_RUNTIME_PATH=/run/user/1000/pulse
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=PULSE_RUNTIME_PATH=/run/user/1000/pulse
-# Execució directa sense caràcters de shell com &&
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+# amixer pot fallar (Operation not permitted, controls Headphone/Speaker inexistents).
+# Si cal configurar ALSA, executa amixer scontrols a la Pi i descomenta/ajusta les línies següents.
+# ExecStartPre=-/usr/bin/amixer -c 0 cset numid=3 1
+# ExecStartPre=-/usr/bin/amixer sset Headphone 60%% unmute
+# ExecStartPre=-/usr/bin/amixer sset Speaker 60%% unmute
 ExecStart=/usr/bin/python3 /home/arnau/picar-x-mnebot/gpt_car.py
 Restart=on-failure
 RestartSec=5

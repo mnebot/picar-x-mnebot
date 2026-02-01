@@ -45,6 +45,18 @@ pip install -r requirements.txt
 
 ## Configuració
 
+### Permisos d'àudio a la Raspberry Pi
+
+A la Raspberry Pi, abans d'executar el projecte, cal afegir l'usuari als grups d'àudio i PulseAudio (substitueix `[Usuari]` pel teu nom d'usuari):
+
+```bash
+sudo usermod -aG audio,pulse,pulse-access [Usuari]
+```
+
+Després d'executar la comanda, tanca sessió i torna a entrar (o reinicia) perquè els canvis tinguin efecte.
+
+### Claus d'API d'OpenAI
+
 Abans d'executar el projecte, cal configurar les claus d'API d'OpenAI al fitxer `keys.py`:
 
 ```python
