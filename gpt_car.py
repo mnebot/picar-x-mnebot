@@ -136,6 +136,8 @@ recognizer.dynamic_energy_ratio = 1.6
 speech_loaded = False
 speech_lock = threading.Lock()
 tts_file = None
+# Ref compartida per sincronitzar speak_handler amb wait_for_speech_completion (el bucle principal escriu als refs, el speak_handler llegeix les globals i actualitza el ref quan acaba)
+_speech_loaded_ref = None
 
 def speak_hanlder():
     global speech_loaded, tts_file
@@ -148,6 +150,8 @@ def speak_hanlder():
             # gray_print('speak done')
             with speech_lock:
                 speech_loaded = False
+                if _speech_loaded_ref is not None:
+                    _speech_loaded_ref['speech_loaded'] = False
         time.sleep(0.05)
 
 speak_thread = threading.Thread(target=speak_hanlder)
@@ -792,6 +796,10 @@ def process_user_query(user_input, config, action_state, speech_state, tts_confi
         if tts_status:
             with speech_state['lock']:
                 speech_state['loaded_ref']['speech_loaded'] = True
+            # Sincronitzar globals perquè speak_handler les llegeixi i reprodueixi
+            global speech_loaded, tts_file
+            speech_loaded = True
+            tts_file = speech_state['tts_file_ref']['tts_file']
 
         # ---- wait speak done ----
         if tts_status:
@@ -829,6 +837,8 @@ def main():
     actions_to_be_done_ref = {'actions_to_be_done': actions_to_be_done}
     speech_loaded_ref = {'speech_loaded': speech_loaded}
     tts_file_ref = {'tts_file': tts_file}
+    global _speech_loaded_ref
+    _speech_loaded_ref = speech_loaded_ref
     vilib_module = Vilib if with_img and 'Vilib' in globals() else None
 
     while True:
