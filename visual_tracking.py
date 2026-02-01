@@ -1,7 +1,8 @@
 """
 Mòdul de seguiment visual per al picar-x
-Implementa seguiment visual pur amb càmera (pan/tilt) amb filtre de suavització
-i detecció de persona centrada (FASE 1, PAS 3)
+Implementa seguiment visual pur amb càmera (pan/tilt) amb filtre de suavització,
+detecció de persona centrada (FASE 1) i moviment reactiu quan surt del camp de
+visió (FASE 2.1).
 """
 
 import time
@@ -29,6 +30,12 @@ SMOOTHING_WEIGHTS = [0.1, 0.15, 0.2, 0.25, 0.3]
 VILIB_INIT_DELAY = 1.0  # Segons d'espera per assegurar que Vilib està inicialitzat
 TRACKING_LOOP_DELAY = 0.05  # Segons entre iteracions del seguiment
 ERROR_RETRY_DELAY = 0.1  # Segons d'espera després d'un error
+PERSON_LOST_TIMEOUT = 0.5  # Segons sense detecció per considerar persona perduda (FASE 2.1)
+
+# Constants per moviment reactiu (FASE 2.1)
+TURN_ANGLE_DEGREES = 30  # Graus de gir de les rodes cap a la direcció de la persona
+TURN_DURATION = 0.4  # Segons de durada del gir
+TURN_SPEED = 25  # Velocitat durant el gir (0-100)
 
 
 def clamp_number(num, a, b):
@@ -158,11 +165,50 @@ def processar_deteccio_persona(vilib, detection_history, state, state_lock):
         abs(desplacament_y) < CENTER_ZONE_TOLERANCE
     )
     
-    # Actualitzar estat global de forma thread-safe
+    # Actualitzar estat global de forma thread-safe (incloent última posició per FASE 2.1)
     with state_lock:
         state['centered'] = esta_centrada
+        state['last_seen_x'] = posicio_suavitzada_x
+        state['last_seen_time'] = time.time()
+        state['person_lost_turn_done'] = False  # Reset quan tornem a detectar
     
     return (posicio_suavitzada_x, posicio_suavitzada_y, esta_centrada)
+
+
+def girar_robot_cap_direccio(car, direccio):
+    """
+    Gira el robot cap a la direcció indicada (esquerra o dreta).
+    
+    Útil quan la persona surt del camp de visió: el robot gira cap allà on
+    es va la persona segons l'última posició coneguda (FASE 2.1).
+    
+    Args:
+        car: Instància de Picarx
+        direccio: 'esquerra' o 'dreta'
+    
+    Returns:
+        True si el gir s'ha executat, False si hi ha hagut error
+    """
+    try:
+        if not hasattr(car, 'set_dir_servo_angle') or not hasattr(car, 'forward') or not hasattr(car, 'stop'):
+            return False
+        
+        angle = -TURN_ANGLE_DEGREES if direccio == 'esquerra' else TURN_ANGLE_DEGREES
+        car.set_dir_servo_angle(angle)
+        car.forward(clamp_number(TURN_SPEED, 0, 100))
+        time.sleep(TURN_DURATION)
+        car.stop()
+        car.set_dir_servo_angle(0)
+        return True
+    except (AttributeError, Exception) as e:
+        print(f'[Visual Tracking] Error en gir reactiu: {e}')
+        try:
+            car.stop()
+            if hasattr(car, 'set_dir_servo_angle'):
+                car.set_dir_servo_angle(0)
+        except Exception:
+            pass
+        return False
 
 
 def aplicar_angles_camera(car, pan_angle, tilt_angle):
@@ -227,11 +273,28 @@ def processar_iteracio_tracking(vilib, detection_history, state, state_lock,
         
         return (nou_pan_angle, nou_tilt_angle)
     else:
-        # Si no hi ha detecció, buidar l'històric i actualitzar estat
+        # Si no hi ha detecció: buidar històric, actualitzar estat i comprovar persona perduda (FASE 2.1)
         detection_history['x'].clear()
         detection_history['y'].clear()
+        
+        current_time = time.time()
         with state_lock:
             state['centered'] = False
+            last_seen_x = state.get('last_seen_x')
+            last_seen_time = state.get('last_seen_time')
+            turn_done = state.get('person_lost_turn_done', False)
+        
+        # Detectar persona perduda: sense detecció durant PERSON_LOST_TIMEOUT
+        if (last_seen_time is not None and
+                not turn_done and
+                (current_time - last_seen_time) >= PERSON_LOST_TIMEOUT):
+            # Determinar direcció segons última posició (esquerra/dreta del centre)
+            if last_seen_x is not None:
+                direccio = 'esquerra' if last_seen_x < CAMERA_CENTER_X else 'dreta'
+                if girar_robot_cap_direccio(car, direccio):
+                    with state_lock:
+                        state['person_lost_turn_done'] = True
+                        state['last_seen_time'] = current_time  # Cooldown
         
         return (pan_angle, tilt_angle)
 
@@ -321,8 +384,13 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
         CAMERA_TILT_MAX_ANGLE
     )
     
-    # Estat compartit
-    state = {'centered': False}
+    # Estat compartit (incloent camps per FASE 2.1: persona perduda)
+    state = {
+        'centered': False,
+        'last_seen_x': None,
+        'last_seen_time': None,
+        'person_lost_turn_done': False,
+    }
     state_lock = threading.Lock()
     
     def visual_tracking_handler():
