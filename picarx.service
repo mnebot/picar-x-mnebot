@@ -10,6 +10,8 @@ Group=arnau
 SupplementaryGroups=audio
 WorkingDirectory=/home/arnau/picar-x-mnebot/
 # Passant les variables d'entorn necessàries per al so
+Environment=PYTHONPATH=/home/arnau/picar-x-mnebot
+Environment=PYTHONUNBUFFERED=1
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=PULSE_SERVER=unix:/run/user/1000/pulse/native
 Environment=PULSE_RUNTIME_PATH=/run/user/1000/pulse
