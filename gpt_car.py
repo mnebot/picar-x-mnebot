@@ -169,6 +169,10 @@ LED_BLINK_INTERVAL = 0.1 # seconds
 
 actions_to_be_done = []
 action_lock = threading.Lock()
+# Referències compartides entre main() i action_handler(); el fil principal escriu 'actions'
+# i el fil d'accions escriu 'actions_done' quan acaba.
+action_status_ref = {'action_status': 'standby'}
+actions_to_be_done_ref = {'actions_to_be_done': []}
 
 
 def update_led_status(new_status, last_status, last_led_time):
@@ -320,19 +324,16 @@ def handle_action_state(state, last_action_status, last_action_time, action_inte
 
 def action_handler():
     global action_status, actions_to_be_done, led_status, last_action_status, last_led_status
+    global action_status_ref, actions_to_be_done_ref
 
     action_interval = 5 # seconds
     last_action_time = time.time()
     last_led_time = time.time()
 
-    # Crear referències mutables per poder actualitzar action_status des de funcions
-    action_status_ref = {'action_status': action_status}
-    actions_to_be_done_ref = {'actions_to_be_done': actions_to_be_done}
-
     while True:
         with action_lock:
-            _state = action_status
-            action_status_ref['action_status'] = action_status
+            _state = action_status_ref['action_status']
+            action_status = _state
 
         # led
         led_status = _state
@@ -346,9 +347,10 @@ def action_handler():
             actions_to_be_done_ref, action_lock, action_status_ref, my_car
         )
         
-        # Sincronitzar action_status global amb la referència
+        # Sincronitzar variable global per a get_user_input, etc.
         with action_lock:
             action_status = action_status_ref['action_status']
+            actions_to_be_done = actions_to_be_done_ref['actions_to_be_done']
 
         time.sleep(0.01)
 
@@ -822,6 +824,7 @@ def main():
     global current_feeling, last_feeling
     global speech_loaded
     global action_status, actions_to_be_done
+    global action_status_ref, actions_to_be_done_ref
     global tts_file, tts_dir
     global input_mode
 
@@ -834,9 +837,9 @@ def main():
         # person_detection_thread.start()  # Desactivat: no dir "Hola" automàticament
         visual_tracking_thread.start()  # Iniciar seguiment visual pur (FASE 1, PAS 1)
 
-    # Crear referències mutables per poder actualitzar variables des de funcions
-    action_status_ref = {'action_status': action_status}
-    actions_to_be_done_ref = {'actions_to_be_done': actions_to_be_done}
+    # Sincronitzar refs compartides amb el fil d'accions
+    action_status_ref['action_status'] = action_status
+    actions_to_be_done_ref['actions_to_be_done'] = actions_to_be_done
     speech_loaded_ref = {'speech_loaded': speech_loaded}
     tts_file_ref = {'tts_file': tts_file}
     global _speech_loaded_ref
