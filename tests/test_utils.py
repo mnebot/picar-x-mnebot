@@ -41,11 +41,5 @@ class TestSpeakBlock(unittest.TestCase):
     """Tests per a speak_block"""
     pass
 
-
-class TestPrintColorVariations(unittest.TestCase):
-    """Tests addicionals per a print_color amb diferents paràmetres"""
-    pass
-
-
 if __name__ == '__main__':
     unittest.main()
