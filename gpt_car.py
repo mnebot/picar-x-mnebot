@@ -465,7 +465,7 @@ def get_voice_input(recognizer_obj, openai_helper_obj, language, action_lock_ref
 
     _stderr_back = redirect_error_2_null() # ignore error print to ignore ALSA errors
     # If the chunk_size is set too small (default_size=1024), it may cause the program to freeze
-    with sr.Microphone(chunk_size=2048) as source:
+    with sr.Microphone(chunk_size=4096) as source:
         cancel_redirect_error(_stderr_back) # restore error print
         recognizer_obj.adjust_for_ambient_noise(source)
         audio = recognizer_obj.listen(source)
