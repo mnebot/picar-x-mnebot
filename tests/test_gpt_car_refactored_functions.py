@@ -229,7 +229,69 @@ class TestHandleThinkState(unittest.TestCase):
 
 class TestExecuteActionsList(unittest.TestCase):
     """Tests per a execute_actions_list()"""
-    
+
+    def _run_execute(self, actions_list, car=None, action_lock_ref=None, action_status_ref=None):
+        if car is None:
+            car = Mock()
+        if action_lock_ref is None:
+            action_lock_ref = threading.Lock()
+        if action_status_ref is None:
+            action_status_ref = {'action_status': 'actions'}
+        gpt_car.execute_actions_list(actions_list, car, action_lock_ref, action_status_ref)
+        return car, action_status_ref
+
+    @patch('gpt_car.time.sleep')
+    def test_seguir_persona_crida_start_visual_tracking(self, mock_sleep):
+        """Quan l'accó és 'seguir persona' es crida start_visual_tracking"""
+        with patch.object(gpt_car, 'start_visual_tracking', MagicMock()) as mock_start:
+            self._run_execute(["seguir persona"])
+        mock_start.assert_called_once()
+
+    @patch('gpt_car.time.sleep')
+    def test_follow_me_crida_start_visual_tracking(self, mock_sleep):
+        """Quan l'accó és 'follow me' es crida start_visual_tracking"""
+        with patch.object(gpt_car, 'start_visual_tracking', MagicMock()) as mock_start:
+            self._run_execute(["follow me"])
+        mock_start.assert_called_once()
+
+    @patch('gpt_car.time.sleep')
+    def test_aturar_seguiment_crida_stop_visual_tracking(self, mock_sleep):
+        """Quan l'accó és 'aturar seguiment' es crida stop_visual_tracking"""
+        with patch.object(gpt_car, 'stop_visual_tracking', MagicMock()) as mock_stop:
+            self._run_execute(["aturar seguiment"])
+        mock_stop.assert_called_once()
+
+    @patch('gpt_car.time.sleep')
+    def test_stop_following_crida_stop_visual_tracking(self, mock_sleep):
+        """Quan l'accó és 'stop following' es crida stop_visual_tracking"""
+        with patch.object(gpt_car, 'stop_visual_tracking', MagicMock()) as mock_stop:
+            self._run_execute(["stop following"])
+        mock_stop.assert_called_once()
+
+    @patch('gpt_car.time.sleep')
+    def test_accio_normal_crida_actions_dict(self, mock_sleep):
+        """Quan l'accó és normal (ex. nod) es crida actions_dict[action](car)"""
+        car = Mock()
+        with patch.object(gpt_car, 'actions_dict', {'nod': MagicMock()}):
+            self._run_execute(["nod"], car=car)
+            gpt_car.actions_dict['nod'].assert_called_once_with(car)
+
+    @patch('gpt_car.time.sleep')
+    def test_accio_done_al_final(self, mock_sleep):
+        """Després d'executar la llista, action_status es posa a 'actions_done'"""
+        with patch.object(gpt_car, 'start_visual_tracking', MagicMock()):
+            action_status_ref = {'action_status': 'actions'}
+            self._run_execute(["seguir persona"], action_status_ref=action_status_ref)
+        self.assertEqual(action_status_ref['action_status'], 'actions_done')
+
+    @patch('gpt_car.time.sleep')
+    def test_seguir_i_aturar_ambdues_cridades(self, mock_sleep):
+        """Llista amb 'seguir persona' i 'aturar seguiment' crida ambdues funcions"""
+        with patch.object(gpt_car, 'start_visual_tracking', MagicMock()) as mock_start:
+            with patch.object(gpt_car, 'stop_visual_tracking', MagicMock()) as mock_stop:
+                self._run_execute(["seguir persona", "aturar seguiment"])
+        mock_start.assert_called_once()
+        mock_stop.assert_called_once()
 
 
 class TestHandleActionState(unittest.TestCase):
@@ -341,7 +403,7 @@ class TestParseGptResponse(unittest.TestCase):
         # Crear un objecte que provoqui excepció quan es fa isinstance
         class BadResponse:
             def __str__(self):
-                raise Exception("Error converting to string")
+                raise ValueError("Error converting to string")
         
         response = BadResponse()
         sound_effects = []
