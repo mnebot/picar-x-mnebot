@@ -707,6 +707,47 @@ class TestCreateHandlerStateFase2(unittest.TestCase):
         self.assertIsNone(state['search_direction'])
         self.assertEqual(state['search_pan_direction'], 1)
 
+    def test_state_inclou_stop_requested(self):
+        """Test que l'estat inclou stop_requested per aturar el seguiment des d'una acció"""
+        mock_car = Mock()
+        _, state, lock, is_centered = create_visual_tracking_handler(
+            mock_car, None, False, 20
+        )
+        self.assertIn('stop_requested', state)
+        self.assertFalse(state['stop_requested'])
+
+
+class TestHandlerStopRequested(unittest.TestCase):
+    """Tests que el handler de seguiment acaba quan stop_requested és True"""
+
+    @patch('visual_tracking.time.sleep')
+    @patch('visual_tracking.processar_iteracio_tracking')
+    def test_handler_surt_del_loop_quan_stop_requested(self, mock_iteracio, mock_sleep):
+        """El loop del handler acaba quan s'estableix stop_requested a True"""
+        mock_car = Mock()
+        mock_vilib = Mock()
+        mock_vilib.detect_obj_parameter = {}
+
+        handler, state, state_lock, _ = create_visual_tracking_handler(
+            mock_car, mock_vilib, True, 20
+        )
+        mock_iteracio.return_value = (0, 20)
+
+        def sleep_side_effect(secs):
+            # Després del primer sleep del loop, demanar aturada
+            with state_lock:
+                state['stop_requested'] = True
+
+        mock_sleep.side_effect = sleep_side_effect
+
+        thread = threading.Thread(target=handler)
+        thread.daemon = True
+        thread.start()
+        thread.join(timeout=3.0)
+        self.assertFalse(thread.is_alive(), "El handler hauria d'haver acabat quan stop_requested és True")
+        with state_lock:
+            self.assertTrue(state['stop_requested'])
+
 
 if __name__ == '__main__':
     unittest.main()

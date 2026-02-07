@@ -281,16 +281,17 @@ def handle_think_state(last_action_status):
 def execute_actions_list(actions_list, car, action_lock_ref, action_status_ref):
     """
     Executa una llista d'accions sobre el cotxe.
-    
-    Args:
-        actions_list: Llista d'accions a executar
-        car: Instància de Picarx
-        action_lock_ref: Referència al lock d'accions
-        action_status_ref: Referència a la variable action_status (per actualitzar-la)
+    Les accions "seguir persona" i "aturar seguiment" activen/aturen el seguiment visual;
+    la resta es deleguen a actions_dict.
     """
     for _action in actions_list:
         try:
-            actions_dict[_action](car)
+            if _action in ACTIONS_SEGUIR_PERSONA:
+                start_visual_tracking()
+            elif _action in ACTIONS_ATURAR_SEGUIMENT:
+                stop_visual_tracking()
+            else:
+                actions_dict[_action](car)
         except Exception as e:
             print(f'action error: {e}')
         time.sleep(0.5)
@@ -422,8 +423,8 @@ person_detection_thread = threading.Thread(target=person_detection_handler)
 person_detection_thread.daemon = True
 
 
-# visual tracking thread - seguiment visual pur amb càmera (FASE 1, PAS 2 i 3)
-# Crear handler de seguiment visual (Vilib ja està importat abans si with_img)
+# visual tracking - seguiment visual activat per l'accó "seguir persona" (no per handler continu)
+# El thread es crea i s'inicia quan l'assistent retorna l'accó "seguir persona"; s'atura amb "aturar seguiment"
 Vilib_module = Vilib if with_img and 'Vilib' in globals() else None
 visual_tracking_handler, visual_tracking_state, visual_tracking_lock, is_person_centered = create_visual_tracking_handler(
     my_car, 
@@ -431,9 +432,33 @@ visual_tracking_handler, visual_tracking_state, visual_tracking_lock, is_person_
     with_img, 
     DEFAULT_HEAD_TILT
 )
+visual_tracking_thread_ref = {'thread': None}
 
-visual_tracking_thread = threading.Thread(target=visual_tracking_handler)
-visual_tracking_thread.daemon = True
+# Accions de seguiment: l'assistent pot retornar en català o anglès
+ACTIONS_SEGUIR_PERSONA = frozenset({"seguir persona", "follow me", "follow"})
+ACTIONS_ATURAR_SEGUIMENT = frozenset({"aturar seguiment", "stop following", "stop follow"})
+
+
+def start_visual_tracking():
+    """Inicia el thread de seguiment visual (cridat quan l'assistent retorna l'accó 'seguir persona')."""
+    if not with_img:
+        return
+    with visual_tracking_lock:
+        visual_tracking_state['stop_requested'] = False
+    t = visual_tracking_thread_ref['thread']
+    if t is None or not t.is_alive():
+        t = threading.Thread(target=visual_tracking_handler)
+        t.daemon = True
+        visual_tracking_thread_ref['thread'] = t
+        t.start()
+        gray_print("Seguiment visual activat.")
+
+
+def stop_visual_tracking():
+    """Atura el thread de seguiment visual (cridat quan l'assistent retorna l'accó 'aturar seguiment')."""
+    with visual_tracking_lock:
+        visual_tracking_state['stop_requested'] = True
+    gray_print("Seguiment visual aturat.")
 
 
 # Funcions auxiliars per a main()
@@ -835,7 +860,8 @@ def main():
     action_thread.start()
     if with_img:
         # person_detection_thread.start()  # Desactivat: no dir "Hola" automàticament
-        visual_tracking_thread.start()  # Iniciar seguiment visual pur (FASE 1, PAS 1)
+        # El seguiment visual s'activa amb l'accó "seguir persona" de l'assistent, no aquí
+        pass
 
     # Sincronitzar refs compartides amb el fil d'accions
     action_status_ref['action_status'] = action_status
