@@ -884,10 +884,9 @@ class TestMainFunction(unittest.TestCase):
     
     @patch('gpt_car.speak_thread')
     @patch('gpt_car.action_thread')
-    @patch('gpt_car.visual_tracking_thread')
     @patch('gpt_car.get_user_input')
     @patch('gpt_car.process_user_query')
-    def test_main_initialization(self, mock_process, mock_get_input, mock_visual,
+    def test_main_initialization(self, mock_process, mock_get_input,
                                  mock_action, mock_speak):
         """Test inicialització de main()"""
         mock_get_input.return_value = (None, True, False, 'voice')
@@ -896,7 +895,6 @@ class TestMainFunction(unittest.TestCase):
         # Mock threads
         mock_speak.start = Mock()
         mock_action.start = Mock()
-        mock_visual.start = Mock()
         
         # No podem executar main() completament perquè té un bucle infinit
         # Però podem verificar que existeix
@@ -906,9 +904,8 @@ class TestMainFunction(unittest.TestCase):
     @patch('gpt_car.my_car')
     @patch('gpt_car.speak_thread')
     @patch('gpt_car.action_thread')
-    @patch('gpt_car.visual_tracking_thread')
     @patch('gpt_car.get_user_input')
-    def test_main_input_mode_changed(self, mock_get_input, mock_visual,
+    def test_main_input_mode_changed(self, mock_get_input,
                                      mock_action, mock_speak, mock_car):
         """Test que main() gestiona el canvi de mode d'input"""
         # Simular canvi de mode d'input
@@ -920,7 +917,6 @@ class TestMainFunction(unittest.TestCase):
         # Mock threads
         mock_speak.start = Mock()
         mock_action.start = Mock()
-        mock_visual.start = Mock()
         
         # No podem executar main() completament, però podem verificar la lògica
         # Verificar que get_user_input es crida amb el mode correcte
@@ -929,10 +925,9 @@ class TestMainFunction(unittest.TestCase):
     @patch('gpt_car.my_car')
     @patch('gpt_car.speak_thread')
     @patch('gpt_car.action_thread')
-    @patch('gpt_car.visual_tracking_thread')
     @patch('gpt_car.get_user_input')
     @patch('gpt_car.process_user_query')
-    def test_main_processes_query(self, mock_process, mock_get_input, mock_visual,
+    def test_main_processes_query(self, mock_process, mock_get_input,
                                   mock_action, mock_speak, mock_car):
         """Test que main() processa una consulta"""
         mock_get_input.side_effect = [
@@ -943,7 +938,6 @@ class TestMainFunction(unittest.TestCase):
         # Mock threads
         mock_speak.start = Mock()
         mock_action.start = Mock()
-        mock_visual.start = Mock()
         
         # No podem executar main() completament, però podem verificar la lògica
         self.assertTrue(hasattr(gpt_car, 'main'))

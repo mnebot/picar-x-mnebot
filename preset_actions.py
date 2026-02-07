@@ -233,6 +233,16 @@ def advance_20cm(car):
     car.stop()
 
 
+def seguir_persona(car):
+    """Placeholder: l'accó 'seguir persona' es gestiona a gpt_car (inicia el thread de seguiment)."""
+    pass
+
+
+def aturar_seguiment(car):
+    """Placeholder: l'accó 'aturar seguiment' es gestiona a gpt_car (atura el thread de seguiment)."""
+    pass
+
+
 actions_dict = {
     "shake head":shake_head, 
     "nod": nod,
@@ -247,6 +257,8 @@ actions_dict = {
     "advance": advance_20cm,
     "avanci": advance_20cm,
     "forward 20cm": advance_20cm,
+    "seguir persona": seguir_persona,
+    "aturar seguiment": aturar_seguiment,
 }
 
 sounds_dict = {

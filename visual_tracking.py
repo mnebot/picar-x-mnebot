@@ -451,6 +451,7 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
     )
     
     # Estat compartit (FASE 2.1: persona perduda, FASE 2.2: estratègia de recerca)
+    # stop_requested: quan és True, el loop del handler acaba (per aturar seguiment des d'una acció)
     state = {
         'centered': False,
         'last_seen_x': None,
@@ -462,6 +463,7 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
         'search_last_extra_turn_time': None,
         'search_last_camera_step_time': None,
         'search_pan_direction': 1,  # 1 o -1 per sentit de l'escombrat
+        'stop_requested': False,
     }
     state_lock = threading.Lock()
     
@@ -493,6 +495,9 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
         tilt_angle = default_head_tilt
         
         while True:
+            with state_lock:
+                if state.get('stop_requested'):
+                    break
             try:
                 pan_angle, tilt_angle = processar_iteracio_tracking(
                     vilib, detection_history, state, state_lock,
