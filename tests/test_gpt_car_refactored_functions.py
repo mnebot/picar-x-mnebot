@@ -293,6 +293,50 @@ class TestExecuteActionsList(unittest.TestCase):
         mock_start.assert_called_once()
         mock_stop.assert_called_once()
 
+    @patch('gpt_car.time.sleep')
+    def test_exception_en_accio_continua_i_marques_actions_done(self, mock_sleep):
+        """Si una acció llança excepció, es captura i al final es posa actions_done"""
+        failing = MagicMock(side_effect=ValueError("accidental"))
+        with patch.object(gpt_car, 'actions_dict', {'nod': failing}):
+            action_status_ref = {'action_status': 'actions'}
+            self._run_execute(["nod"], action_status_ref=action_status_ref)
+        self.assertEqual(action_status_ref['action_status'], 'actions_done')
+
+
+class TestStartVisualTracking(unittest.TestCase):
+    """Tests que executen el cos de start_visual_tracking() per cobertura"""
+
+    def test_retorna_quan_no_with_img(self):
+        """Quan with_img és False no fa res i retorna"""
+        with patch.object(gpt_car, 'with_img', False):
+            gpt_car.start_visual_tracking()
+        # No hauria d'haver cridat thread.start ni gray_print
+
+    def test_with_img_inicia_thread_si_no_viu(self):
+        """Quan with_img és True i el thread no existeix o no viu, inicia el thread"""
+        mock_handler = MagicMock()
+        with patch.object(gpt_car, 'with_img', True):
+            with patch.object(gpt_car, 'visual_tracking_handler', mock_handler):
+                with patch.object(gpt_car, 'visual_tracking_lock', MagicMock()):
+                    with patch.object(gpt_car, 'visual_tracking_state', {'stop_requested': True}):
+                        ref = {'thread': None}
+                        with patch.object(gpt_car, 'visual_tracking_thread_ref', ref):
+                            gpt_car.start_visual_tracking()
+        self.assertIsNotNone(ref['thread'])
+        self.assertTrue(ref['thread'].daemon)
+
+
+class TestStopVisualTracking(unittest.TestCase):
+    """Tests que executen el cos de stop_visual_tracking() per cobertura"""
+
+    def test_posa_stop_requested_i_imprimeix(self):
+        """Posem stop_requested a True (comportament de stop_visual_tracking)"""
+        state = {'stop_requested': False}
+        with patch.object(gpt_car, 'visual_tracking_lock', MagicMock()):
+            with patch.object(gpt_car, 'visual_tracking_state', state):
+                gpt_car.stop_visual_tracking()
+        self.assertTrue(state['stop_requested'])
+
 
 class TestHandleActionState(unittest.TestCase):
     """Tests per a handle_action_state()"""
