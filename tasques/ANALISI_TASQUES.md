@@ -211,17 +211,23 @@ Afegir secció al README documentant:
 
 ## FASE 2: MOVIMENT REACTIU (Quan surt del camp de visió)
 
-### Estat: ❌ NO INICIADA
+### Estat: ⚠️ EN PROGRÉS (2.1 completat)
 
 #### 2.1. Detectar quan la persona surt del camp de visió
-**Estat**: ❌ **NO IMPLEMENTAT**
+**Estat**: ✅ **COMPLETAT**
 
-**Pendent**:
-- Detectar quan no es detecta persona durant 0.5s
-- Recordar última posició coneguda (dreta/esquerra)
-- Girar el robot cap a la direcció on va la persona
+**Implementat**:
+- Detecció quan no es detecta persona durant 0.5s (`PERSON_LOST_TIMEOUT`)
+- Registre de l'última posició coneguda (dreta/esquerra del centre) a `state['last_seen_x']`
+- Gir del robot cap a la direcció on va la persona amb `girar_robot_cap_direccio()`
+- No es repeteix el gir per al mateix esdeveniment (`person_lost_turn_done`)
+- Es torna a permetre el gir quan es detecta de nou la persona
 
-**Nota**: El seguiment visual actual detecta quan no hi ha persona (buida detection_history), però no hi ha lògica per moure el robot.
+**Codi rellevant**:
+- `visual_tracking.py`: constants `PERSON_LOST_TIMEOUT`, `TURN_ANGLE_DEGREES`, `TURN_DURATION`, `TURN_SPEED`
+- `visual_tracking.py`: funció `girar_robot_cap_direccio(car, direccio)`
+- `visual_tracking.py`: actualització de `processar_deteccio_persona` i `processar_iteracio_tracking`
+- `tests/test_visual_tracking.py`: 11 nous tests per FASE 2.1
 
 ---
 
@@ -327,7 +333,7 @@ Afegir secció al README documentant:
 | Fase | Estat | Progress |
 |------|-------|----------|
 | FASE 1 | ✅ Completada | 100% |
-| FASE 2 | ❌ No iniciada | 0% |
+| FASE 2 | ⚠️ En progrés | 33% (2.1/3) |
 | FASE 3 | ❌ No iniciada | 0% |
 | FASE 4 | ❌ No iniciada | 0% |
 | FASE 5 | ❌ No iniciada | 0% (Opcional) |
