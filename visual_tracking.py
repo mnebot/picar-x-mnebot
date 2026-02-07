@@ -1,8 +1,8 @@
 """
 Mòdul de seguiment visual per al picar-x
 Implementa seguiment visual pur amb càmera (pan/tilt) amb filtre de suavització,
-detecció de persona centrada (FASE 1) i moviment reactiu quan surt del camp de
-visió (FASE 2.1).
+detecció de persona centrada (FASE 1), moviment reactiu quan surt del camp de
+visió (FASE 2.1) i estratègia de recerca (FASE 2.2).
 """
 
 import time
@@ -36,6 +36,13 @@ PERSON_LOST_TIMEOUT = 0.5  # Segons sense detecció per considerar persona perdu
 TURN_ANGLE_DEGREES = 30  # Graus de gir de les rodes cap a la direcció de la persona
 TURN_DURATION = 0.4  # Segons de durada del gir
 TURN_SPEED = 25  # Velocitat durant el gir (0-100)
+
+# Constants per estratègia de recerca (FASE 2.2)
+SEARCH_TIMEOUT = 5.0  # Segons màxims de recerca abans de desistir
+SEARCH_EXTRA_TURN_INTERVAL = 1.0  # Segons entre girs addicionals
+SEARCH_EXTRA_TURN_ANGLE = 15  # Graus addicionals per gir durant recerca
+SEARCH_CAMERA_PAN_STEP = 8  # Graus de pan per pas de recerca amb càmera
+SEARCH_CAMERA_STEP_INTERVAL = 0.25  # Segons entre passos de recerca amb càmera
 
 
 def clamp_number(num, a, b):
@@ -175,16 +182,18 @@ def processar_deteccio_persona(vilib, detection_history, state, state_lock):
     return (posicio_suavitzada_x, posicio_suavitzada_y, esta_centrada)
 
 
-def girar_robot_cap_direccio(car, direccio):
+def girar_robot_cap_direccio(car, direccio, graus=None):
     """
     Gira el robot cap a la direcció indicada (esquerra o dreta).
     
     Útil quan la persona surt del camp de visió: el robot gira cap allà on
     es va la persona segons l'última posició coneguda (FASE 2.1).
+    Per l'estratègia de recerca (FASE 2.2) es poden especificar girs més curts.
     
     Args:
         car: Instància de Picarx
         direccio: 'esquerra' o 'dreta'
+        graus: Angle de gir en graus (None = TURN_ANGLE_DEGREES per defecte)
     
     Returns:
         True si el gir s'ha executat, False si hi ha hagut error
@@ -193,7 +202,8 @@ def girar_robot_cap_direccio(car, direccio):
         if not hasattr(car, 'set_dir_servo_angle') or not hasattr(car, 'forward') or not hasattr(car, 'stop'):
             return False
         
-        angle = -TURN_ANGLE_DEGREES if direccio == 'esquerra' else TURN_ANGLE_DEGREES
+        angle_graus = graus if graus is not None else TURN_ANGLE_DEGREES
+        angle = -angle_graus if direccio == 'esquerra' else angle_graus
         car.set_dir_servo_angle(angle)
         car.forward(clamp_number(TURN_SPEED, 0, 100))
         time.sleep(TURN_DURATION)
@@ -256,6 +266,14 @@ def processar_iteracio_tracking(vilib, detection_history, state, state_lock,
     resultat = processar_deteccio_persona(vilib, detection_history, state, state_lock)
     
     if resultat is not None:
+        # Persona trobada: sortir del mode recerca si hi érem (FASE 2.2)
+        with state_lock:
+            if state.get('search_start_time') is not None:
+                state['search_start_time'] = None
+                state['search_direction'] = None
+                state['search_last_extra_turn_time'] = None
+                state['search_last_camera_step_time'] = None
+        
         posicio_suavitzada_x, posicio_suavitzada_y, _ = resultat
         
         # Calcular i actualitzar angles de la càmera (elimina duplicació pan/tilt)
@@ -273,7 +291,7 @@ def processar_iteracio_tracking(vilib, detection_history, state, state_lock,
         
         return (nou_pan_angle, nou_tilt_angle)
     else:
-        # Si no hi ha detecció: buidar històric, actualitzar estat i comprovar persona perduda (FASE 2.1)
+        # Si no hi ha detecció: buidar històric, actualitzar estat i recerca (FASE 2.1 + 2.2)
         detection_history['x'].clear()
         detection_history['y'].clear()
         
@@ -283,8 +301,49 @@ def processar_iteracio_tracking(vilib, detection_history, state, state_lock,
             last_seen_x = state.get('last_seen_x')
             last_seen_time = state.get('last_seen_time')
             turn_done = state.get('person_lost_turn_done', False)
+            search_start = state.get('search_start_time')
+            search_dir = state.get('search_direction')
+            search_last_turn = state.get('search_last_extra_turn_time')
+            search_last_cam = state.get('search_last_camera_step_time')
+            search_pan_dir = state.get('search_pan_direction', 1)
         
-        # Detectar persona perduda: sense detecció durant PERSON_LOST_TIMEOUT
+        # Mode recerca actiu (FASE 2.2): buscar amb càmera i girs addicionals
+        if search_start is not None:
+            elapsed = current_time - search_start
+            if elapsed >= SEARCH_TIMEOUT:
+                # Timeout: sortir del mode recerca
+                with state_lock:
+                    state['search_start_time'] = None
+                    state['search_direction'] = None
+                    state['search_last_extra_turn_time'] = None
+                    state['search_last_camera_step_time'] = None
+                return (pan_angle, tilt_angle)
+            
+            # Gir addicional periòdic (cada SEARCH_EXTRA_TURN_INTERVAL)
+            last_turn = search_last_turn if search_last_turn is not None else search_start
+            if (current_time - last_turn) >= SEARCH_EXTRA_TURN_INTERVAL and search_dir:
+                if girar_robot_cap_direccio(car, search_dir, SEARCH_EXTRA_TURN_ANGLE):
+                    with state_lock:
+                        state['search_last_extra_turn_time'] = current_time
+            
+            # Recerca amb càmera: moure pan periòdicament
+            last_cam = search_last_cam if search_last_cam is not None else search_start
+            if (current_time - last_cam) >= SEARCH_CAMERA_STEP_INTERVAL:
+                nou_pan = pan_angle + SEARCH_CAMERA_PAN_STEP * search_pan_dir
+                nou_pan = clamp_number(nou_pan, CAMERA_PAN_MIN_ANGLE, CAMERA_PAN_MAX_ANGLE)
+                # Invertir sentit si arribem als límits
+                if nou_pan >= CAMERA_PAN_MAX_ANGLE or nou_pan <= CAMERA_PAN_MIN_ANGLE:
+                    search_pan_dir = -search_pan_dir
+                    with state_lock:
+                        state['search_pan_direction'] = search_pan_dir
+                aplicar_angles_camera(car, nou_pan, tilt_angle)
+                with state_lock:
+                    state['search_last_camera_step_time'] = current_time
+                return (nou_pan, tilt_angle)
+            
+            return (pan_angle, tilt_angle)
+        
+        # Detectar persona perduda: sense detecció durant PERSON_LOST_TIMEOUT (FASE 2.1)
         if (last_seen_time is not None and
                 not turn_done and
                 (current_time - last_seen_time) >= PERSON_LOST_TIMEOUT):
@@ -295,6 +354,13 @@ def processar_iteracio_tracking(vilib, detection_history, state, state_lock,
                     with state_lock:
                         state['person_lost_turn_done'] = True
                         state['last_seen_time'] = current_time  # Cooldown
+                        # Iniciar mode recerca (FASE 2.2)
+                        state['search_start_time'] = current_time
+                        state['search_direction'] = direccio
+                        state['search_last_extra_turn_time'] = current_time
+                        state['search_last_camera_step_time'] = current_time
+                        # Sentit de recerca amb càmera: cap a on va la persona
+                        state['search_pan_direction'] = -1 if direccio == 'esquerra' else 1
         
         return (pan_angle, tilt_angle)
 
@@ -384,12 +450,18 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
         CAMERA_TILT_MAX_ANGLE
     )
     
-    # Estat compartit (incloent camps per FASE 2.1: persona perduda)
+    # Estat compartit (FASE 2.1: persona perduda, FASE 2.2: estratègia de recerca)
     state = {
         'centered': False,
         'last_seen_x': None,
         'last_seen_time': None,
         'person_lost_turn_done': False,
+        # FASE 2.2: mode recerca
+        'search_start_time': None,
+        'search_direction': None,
+        'search_last_extra_turn_time': None,
+        'search_last_camera_step_time': None,
+        'search_pan_direction': 1,  # 1 o -1 per sentit de l'escombrat
     }
     state_lock = threading.Lock()
     
