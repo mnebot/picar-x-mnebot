@@ -286,9 +286,9 @@ def execute_actions_list(actions_list, car, action_lock_ref, action_status_ref):
     """
     for _action in actions_list:
         try:
-            if _action == ACTION_SEGUIR_PERSONA:
+            if _action in ACTIONS_SEGUIR_PERSONA:
                 start_visual_tracking()
-            elif _action == ACTION_ATURAR_SEGUIMENT:
+            elif _action in ACTIONS_ATURAR_SEGUIMENT:
                 stop_visual_tracking()
             else:
                 actions_dict[_action](car)
@@ -434,8 +434,9 @@ visual_tracking_handler, visual_tracking_state, visual_tracking_lock, is_person_
 )
 visual_tracking_thread_ref = {'thread': None}
 
-ACTION_SEGUIR_PERSONA = "seguir persona"
-ACTION_ATURAR_SEGUIMENT = "aturar seguiment"
+# Accions de seguiment: l'assistent pot retornar en català o anglès
+ACTIONS_SEGUIR_PERSONA = frozenset({"seguir persona", "follow me", "follow"})
+ACTIONS_ATURAR_SEGUIMENT = frozenset({"aturar seguiment", "stop following", "stop follow"})
 
 
 def start_visual_tracking():

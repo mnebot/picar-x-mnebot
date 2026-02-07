@@ -258,7 +258,11 @@ actions_dict = {
     "avanci": advance_20cm,
     "forward 20cm": advance_20cm,
     "seguir persona": seguir_persona,
+    "follow me": seguir_persona,
+    "follow": seguir_persona,
     "aturar seguiment": aturar_seguiment,
+    "stop following": aturar_seguiment,
+    "stop follow": aturar_seguiment,
 }
 
 sounds_dict = {
