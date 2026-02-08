@@ -79,7 +79,9 @@ class TestPresetActions(unittest.TestCase):
         self.assertIs(actions_dict["donar la volta"], donar_la_volta)
         donar_la_volta(self.mock_car)
         self.assertGreaterEqual(self.mock_car.reset.call_count, 1)
-        self.assertGreaterEqual(self.mock_car.set_motor_speed.call_count, 2)
+        self.mock_car.backward.assert_called_once()
+        self.mock_car.forward.assert_called_once()
+        self.assertGreaterEqual(self.mock_car.set_dir_servo_angle.call_count, 2)
 
 
 if __name__ == '__main__':
