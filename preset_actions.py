@@ -233,6 +233,20 @@ def advance_20cm(car):
     car.stop()
 
 
+def donar_la_volta(car):
+    """Donar la volta: gira el cotxe 180° en el lloc (rotació sobre si mateix)."""
+    car.reset()
+    car.set_dir_servo_angle(0)
+    # Gir en el lloc: un motor endavant, l'altre enrere
+    speed = 35
+    car.set_motor_speed(1, speed)
+    car.set_motor_speed(2, -speed)
+    sleep(1.1)  # Temps per ~180° (ajustar segons el terreny)
+    car.set_motor_speed(1, 0)
+    car.set_motor_speed(2, 0)
+    car.reset()
+
+
 def seguir_persona(car):
     """Placeholder: l'accó 'seguir persona' es gestiona a gpt_car (inicia el thread de seguiment)."""
     pass
@@ -257,6 +271,9 @@ actions_dict = {
     "advance": advance_20cm,
     "avanci": advance_20cm,
     "forward 20cm": advance_20cm,
+    "donar la volta": donar_la_volta,
+    "girar": donar_la_volta,
+    "turn around": donar_la_volta,
     "seguir persona": seguir_persona,
     "follow me": seguir_persona,
     "follow": seguir_persona,
