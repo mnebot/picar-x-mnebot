@@ -364,60 +364,52 @@ person_detection_lock = threading.Lock()
 GREETING_COOLDOWN = 5.0  # segons d'espera abans de tornar a saludar la mateixa persona
 last_greeting_time = 0
 
+
+def _person_detected_now():
+    """Retorna True si Vilib indica que hi ha una persona a la imatge."""
+    if not hasattr(Vilib, 'detect_obj_parameter') or not isinstance(Vilib.detect_obj_parameter, dict):
+        return False
+    return Vilib.detect_obj_parameter.get('human_n', 0) != 0
+
+
+def _play_greeting_tts():
+    """Genera i activa la reproducció del TTS 'Hola'. Modifica speech_loaded i tts_file (globals)."""
+    global speech_loaded, tts_file
+    try:
+        _time = time.strftime("%y-%m-%d_%H-%M-%S", time.localtime())
+        _tts_f = os.path.join(tts_dir, f"greeting_{_time}_raw.wav")
+        if not openai_helper.text_to_speech("Hola", _tts_f, TTS_VOICE, response_format='wav', instructions=VOICE_INSTRUCTIONS):
+            return
+        tts_file = os.path.join(tts_dir, f"greeting_{_time}_{VOLUME_DB}dB.wav")
+        if sox_volume(_tts_f, tts_file, VOLUME_DB):
+            with speech_lock:
+                speech_loaded = True
+    except Exception as e:
+        print(f'Error en TTS de salutació: {e}')
+
+
 def person_detection_handler():
-    """Fil que detecta persones i fa que el robot digui 'Hola'"""
-    global person_detected, last_greeting_time, speech_loaded, tts_file, tts_dir
-    
+    """Fil que detecta persones i fa que el robot digui 'Hola'."""
+    global person_detected, last_greeting_time
     if not with_img:
         return
-    
-    # Esperar una mica per assegurar que Vilib està completament inicialitzat
-    time.sleep(1.0)
-    
+    time.sleep(1.0)  # Deixar que Vilib s'inicialitzi
     while True:
         try:
-            # Comprovar si hi ha una persona detectada (validar que existeixi el paràmetre)
-            if (hasattr(Vilib, 'detect_obj_parameter') and 
-                isinstance(Vilib.detect_obj_parameter, dict) and
-                Vilib.detect_obj_parameter.get('human_n', 0) != 0):
-                # Persona detectada
+            if _person_detected_now():
                 with person_detection_lock:
-                    current_time = time.time()
-                    # Només saludar si no hem saludat recentment
-                    if not person_detected or (current_time - last_greeting_time) > GREETING_COOLDOWN:
+                    now = time.time()
+                    if not person_detected or (now - last_greeting_time) > GREETING_COOLDOWN:
                         person_detected = True
-                        last_greeting_time = current_time
-                        
-                        # Generar TTS per dir "Hola"
+                        last_greeting_time = now
                         gray_print("Persona detectada! Dient 'Hola'...")
-                        try:
-                            _time = time.strftime("%y-%m-%d_%H-%M-%S", time.localtime())
-                            _tts_f = os.path.join(tts_dir, f"greeting_{_time}_raw.wav")
-                            _tts_status = openai_helper.text_to_speech(
-                                "Hola", 
-                                _tts_f, 
-                                TTS_VOICE, 
-                                response_format='wav', 
-                                instructions=VOICE_INSTRUCTIONS
-                            )
-                            if _tts_status:
-                                tts_file = os.path.join(tts_dir, f"greeting_{_time}_{VOLUME_DB}dB.wav")
-                                _tts_status = sox_volume(_tts_f, tts_file, VOLUME_DB)
-                                if _tts_status:
-                                    # Activar la reproducció del so
-                                    with speech_lock:
-                                        speech_loaded = True
-                        except Exception as e:
-                            print(f'Error en TTS de salutació: {e}')
+                        _play_greeting_tts()
             else:
-                # No hi ha persona detectada
                 with person_detection_lock:
                     person_detected = False
-                    
         except Exception as e:
             print(f'Error en detecció de persones: {e}')
-        
-        time.sleep(0.2)  # Comprovar cada 200ms
+        time.sleep(0.2)
 
 person_detection_thread = threading.Thread(target=person_detection_handler)
 person_detection_thread.daemon = True
@@ -584,7 +576,7 @@ def capture_image(current_path_val, vilib_module=None):
             raise ValueError("Vilib.img no està disponible")
         cv2.imwrite(img_path, vilib_module.img)
         return img_path
-    except (ValueError, AttributeError, Exception) as e:
+    except Exception as e:
         print(f'Warning: Could not write image file: {e}')
         # Try alternative location
         try:
@@ -608,7 +600,7 @@ def get_gpt_response(user_input, openai_helper_obj, with_img_flag, vilib_module=
     Returns:
         dict: Resposta de GPT
     """
-    gray_print(f'thinking ...')
+    gray_print('thinking ...')
     st = time.time()
 
     if with_img_flag:
