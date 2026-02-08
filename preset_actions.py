@@ -234,23 +234,24 @@ def advance_20cm(car):
 
 
 def donar_la_volta(car):
-    """Donar la volta: engeu enrere cap a l'esquerra (rodes a l'esquerra), després avanci cap a la dreta (rodes a la dreta). Adequat per tracció només a les rodes motrius."""
+    """Donar la volta: engeu enrere cap a l'esquerra (rodes a l'esquerra), després avanci cap a la dreta (rodes a la dreta). Adequat per tracció només a les rodes motrius. Durada triplicada per girar ~180°."""
     car.reset()
     car.set_dir_servo_angle(0)
     sleep(0.05)
     speed = 45
+    turn_duration = 2.7  # Triple de 0.9 s per fer un gir molt més ample
     # 1) Enrera amb les rodes cap a l'esquerra
     car.set_dir_servo_angle(-40)
     sleep(0.08)
     car.backward(speed)
-    sleep(0.9)
+    sleep(turn_duration)
     car.stop()
     sleep(0.05)
     # 2) Endavant amb les rodes cap a la dreta
     car.set_dir_servo_angle(40)
     sleep(0.08)
     car.forward(speed)
-    sleep(0.9)
+    sleep(turn_duration)
     car.stop()
     car.set_dir_servo_angle(0)
     car.reset()
