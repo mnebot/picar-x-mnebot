@@ -283,6 +283,7 @@ actions_dict = {
     "donar la volta": donar_la_volta,
     "girar": donar_la_volta,
     "turn around": donar_la_volta,
+    "turn arround": donar_la_volta,  # typo alias (LLM sometimes returns this)
     "seguir persona": seguir_persona,
     "follow me": seguir_persona,
     "follow": seguir_persona,

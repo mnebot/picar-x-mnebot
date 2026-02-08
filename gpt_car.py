@@ -290,8 +290,11 @@ def execute_actions_list(actions_list, car, action_lock_ref, action_status_ref):
                 start_visual_tracking()
             elif _action in ACTIONS_ATURAR_SEGUIMENT:
                 stop_visual_tracking()
-            else:
+            elif _action in actions_dict:
                 actions_dict[_action](car)
+            else:
+                available = list(actions_dict.keys())
+                print(f'[debug] unknown action: {_action!r}; available: {available}')
         except Exception as e:
             print(f'action error: {e}')
         time.sleep(0.5)
