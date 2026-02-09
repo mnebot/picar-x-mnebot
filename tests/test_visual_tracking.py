@@ -32,6 +32,8 @@ from visual_tracking import (
     calcular_canvi_angle,
     actualitzar_angle_camera,
     create_visual_tracking_handler,
+    start_visual_tracking,
+    stop_visual_tracking,
     processar_deteccio_persona,
     aplicar_angles_camera,
     processar_iteracio_tracking,
@@ -747,6 +749,48 @@ class TestHandlerStopRequested(unittest.TestCase):
         self.assertFalse(thread.is_alive(), "El handler hauria d'haver acabat quan stop_requested és True")
         with state_lock:
             self.assertTrue(state['stop_requested'])
+
+
+class TestStartStopVisualTracking(unittest.TestCase):
+    """Tests per a start_visual_tracking() i stop_visual_tracking() del mòdul"""
+
+    def test_start_visual_tracking_sense_handler_no_fa_res(self):
+        """Quan _tracking_ref és buit (no s'ha cridat create_visual_tracking_handler), start no fa res."""
+        import visual_tracking as vt
+        ref_backup = vt._tracking_ref.copy()
+        vt._tracking_ref.clear()
+        try:
+            start_visual_tracking()  # no ha de llançar
+        finally:
+            vt._tracking_ref.update(ref_backup)
+
+    def test_stop_visual_tracking_sense_handler_no_fa_res(self):
+        """Quan _tracking_ref és buit, stop no fa res."""
+        import visual_tracking as vt
+        ref_backup = vt._tracking_ref.copy()
+        vt._tracking_ref.clear()
+        try:
+            stop_visual_tracking()  # no ha de llançar
+        finally:
+            vt._tracking_ref.update(ref_backup)
+
+    def test_start_visual_tracking_inicia_thread_despres_de_create_handler(self):
+        """Després de create_visual_tracking_handler, start_visual_tracking inicia el thread (sense error)."""
+        mock_car = Mock()
+        mock_vilib = Mock()
+        mock_vilib.detect_obj_parameter = {}
+        create_visual_tracking_handler(mock_car, mock_vilib, True, 20)
+        start_visual_tracking()  # no ha de llançar; el thread s'inicia internament
+
+    def test_stop_visual_tracking_posa_stop_requested(self):
+        """stop_visual_tracking posa state['stop_requested'] a True (el state és el retornat per create)."""
+        mock_car = Mock()
+        mock_vilib = Mock()
+        mock_vilib.detect_obj_parameter = {}
+        _, state, lock, _ = create_visual_tracking_handler(mock_car, mock_vilib, True, 20)
+        self.assertFalse(state.get('stop_requested', True))
+        stop_visual_tracking()
+        self.assertTrue(state['stop_requested'])
 
 
 if __name__ == '__main__':

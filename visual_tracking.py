@@ -44,6 +44,47 @@ SEARCH_EXTRA_TURN_ANGLE = 15  # Graus addicionals per gir durant recerca
 SEARCH_CAMERA_PAN_STEP = 8  # Graus de pan per pas de recerca amb càmera
 SEARCH_CAMERA_STEP_INTERVAL = 0.25  # Segons entre passos de recerca amb càmera
 
+# Estat del mòdul per start/stop (assignat quan es crida create_visual_tracking_handler)
+_tracking_ref = {}
+
+
+def start_visual_tracking():
+    """
+    Inicia el thread de seguiment visual.
+    Si el handler encara no s'ha creat (no s'ha cridat create_visual_tracking_handler), no fa res.
+    """
+    if not _tracking_ref:
+        return
+    handler = _tracking_ref.get('handler')
+    state = _tracking_ref.get('state')
+    lock = _tracking_ref.get('lock')
+    thread_ref = _tracking_ref.get('thread_ref')
+    if handler is None or state is None or lock is None or thread_ref is None:
+        return
+    with lock:
+        state['stop_requested'] = False
+    t = thread_ref.get('thread')
+    if t is None or not t.is_alive():
+        t = threading.Thread(target=handler)
+        t.daemon = True
+        thread_ref['thread'] = t
+        t.start()
+
+
+def stop_visual_tracking():
+    """
+    Atura el thread de seguiment visual (posa stop_requested a True).
+    Si el handler encara no s'ha creat, no fa res.
+    """
+    if not _tracking_ref:
+        return
+    state = _tracking_ref.get('state')
+    lock = _tracking_ref.get('lock')
+    if state is None or lock is None:
+        return
+    with lock:
+        state['stop_requested'] = True
+
 
 def clamp_number(num, a, b):
     """
@@ -519,6 +560,12 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
         """
         with state_lock:
             return state['centered']
+    
+    # Emmagatzemar referències per start_visual_tracking() i stop_visual_tracking()
+    _tracking_ref['handler'] = visual_tracking_handler
+    _tracking_ref['state'] = state
+    _tracking_ref['lock'] = state_lock
+    _tracking_ref['thread_ref'] = {'thread': None}
     
     return visual_tracking_handler, state, state_lock, is_person_centered
 

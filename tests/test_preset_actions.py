@@ -28,7 +28,7 @@ from preset_actions import (
     actions_dict, sounds_dict,
     wave_hands, resist, act_cute, rub_hands, think, keep_think,
     shake_head, nod, depressed, twist_body, celebrate,
-    honking, start_engine, advance_20cm,
+    honking, start_engine, advance_20cm, donar_la_volta,
     seguir_persona, aturar_seguiment,
 )
 
@@ -52,7 +52,7 @@ class TestPresetActions(unittest.TestCase):
             self.assertTrue(callable(sound_func), f"Sound '{sound_name}' no és callable")
 
     def test_seguir_persona_aturar_seguiment_callable(self):
-        """Test que seguir_persona i aturar_seguiment són callable (placeholders gestionats a gpt_car)"""
+        """Test que seguir_persona i aturar_seguiment són callable (executen start/stop a visual_tracking)."""
         self.assertTrue(callable(seguir_persona))
         self.assertTrue(callable(aturar_seguiment))
 
@@ -72,6 +72,16 @@ class TestPresetActions(unittest.TestCase):
         for k in aturadors:
             self.assertIn(k, actions_dict, f"Falta acció '{k}' a actions_dict")
             self.assertIs(actions_dict[k], aturar_seguiment)
+
+    def test_donar_la_volta_accio_disponible_i_callable(self):
+        """Test que 'donar la volta' està al diccionari i es pot cridar amb un mock"""
+        self.assertIn("donar la volta", actions_dict)
+        self.assertIs(actions_dict["donar la volta"], donar_la_volta)
+        donar_la_volta(self.mock_car)
+        self.assertGreaterEqual(self.mock_car.reset.call_count, 1)
+        self.mock_car.backward.assert_called_once()
+        self.mock_car.forward.assert_called_once()
+        self.assertGreaterEqual(self.mock_car.set_dir_servo_angle.call_count, 2)
 
 
 if __name__ == '__main__':

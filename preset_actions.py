@@ -1,7 +1,8 @@
-
 from time import sleep
 import random
 from math import sin, cos, pi
+
+import visual_tracking
 
 def wave_hands(car):
     car.reset()
@@ -233,14 +234,38 @@ def advance_20cm(car):
     car.stop()
 
 
+def donar_la_volta(car):
+    """Donar la volta: engeu enrere cap a l'esquerra (rodes a l'esquerra), després avanci cap a la dreta (rodes a la dreta). Adequat per tracció només a les rodes motrius. Durada triplicada per girar ~180°."""
+    car.reset()
+    car.set_dir_servo_angle(0)
+    sleep(0.05)
+    speed = 45
+    turn_duration = 2.7  # Triple de 0.9 s per fer un gir molt més ample
+    # 1) Enrera amb les rodes cap a l'esquerra
+    car.set_dir_servo_angle(-40)
+    sleep(0.08)
+    car.backward(speed)
+    sleep(turn_duration)
+    car.stop()
+    sleep(0.05)
+    # 2) Endavant amb les rodes cap a la dreta
+    car.set_dir_servo_angle(40)
+    sleep(0.08)
+    car.forward(speed)
+    sleep(turn_duration)
+    car.stop()
+    car.set_dir_servo_angle(0)
+    car.reset()
+
+
 def seguir_persona(car):
-    """Placeholder: l'accó 'seguir persona' es gestiona a gpt_car (inicia el thread de seguiment)."""
-    pass
+    """Inicia el seguiment visual via el mòdul visual_tracking (pan/tilt i moviment reactiu)."""
+    visual_tracking.start_visual_tracking()
 
 
 def aturar_seguiment(car):
-    """Placeholder: l'accó 'aturar seguiment' es gestiona a gpt_car (atura el thread de seguiment)."""
-    pass
+    """Atura el seguiment visual via el mòdul visual_tracking."""
+    visual_tracking.stop_visual_tracking()
 
 
 actions_dict = {
@@ -257,6 +282,10 @@ actions_dict = {
     "advance": advance_20cm,
     "avanci": advance_20cm,
     "forward 20cm": advance_20cm,
+    "donar la volta": donar_la_volta,
+    "girar": donar_la_volta,
+    "turn around": donar_la_volta,
+    "turn arround": donar_la_volta,  # typo alias (LLM sometimes returns this)
     "seguir persona": seguir_persona,
     "follow me": seguir_persona,
     "follow": seguir_persona,

@@ -281,17 +281,15 @@ def handle_think_state(last_action_status):
 def execute_actions_list(actions_list, car, action_lock_ref, action_status_ref):
     """
     Executa una llista d'accions sobre el cotxe.
-    Les accions "seguir persona" i "aturar seguiment" activen/aturen el seguiment visual;
-    la resta es deleguen a actions_dict.
+    Totes les accions (incloent "seguir persona" i "aturar seguiment") es deleguen a actions_dict.
     """
     for _action in actions_list:
         try:
-            if _action in ACTIONS_SEGUIR_PERSONA:
-                start_visual_tracking()
-            elif _action in ACTIONS_ATURAR_SEGUIMENT:
-                stop_visual_tracking()
-            else:
+            if _action in actions_dict:
                 actions_dict[_action](car)
+            else:
+                available = list(actions_dict.keys())
+                print(f'[debug] unknown action: {_action!r}; available: {available}')
         except Exception as e:
             print(f'action error: {e}')
         time.sleep(0.5)
@@ -358,107 +356,9 @@ def action_handler():
 action_thread = threading.Thread(target=action_handler)
 action_thread.daemon = True
 
-# person detection thread - detecta persones i diu "Hola"
-person_detected = False
-person_detection_lock = threading.Lock()
-GREETING_COOLDOWN = 5.0  # segons d'espera abans de tornar a saludar la mateixa persona
-last_greeting_time = 0
-
-def person_detection_handler():
-    """Fil que detecta persones i fa que el robot digui 'Hola'"""
-    global person_detected, last_greeting_time, speech_loaded, tts_file, tts_dir
-    
-    if not with_img:
-        return
-    
-    # Esperar una mica per assegurar que Vilib està completament inicialitzat
-    time.sleep(1.0)
-    
-    while True:
-        try:
-            # Comprovar si hi ha una persona detectada (validar que existeixi el paràmetre)
-            if (hasattr(Vilib, 'detect_obj_parameter') and 
-                isinstance(Vilib.detect_obj_parameter, dict) and
-                Vilib.detect_obj_parameter.get('human_n', 0) != 0):
-                # Persona detectada
-                with person_detection_lock:
-                    current_time = time.time()
-                    # Només saludar si no hem saludat recentment
-                    if not person_detected or (current_time - last_greeting_time) > GREETING_COOLDOWN:
-                        person_detected = True
-                        last_greeting_time = current_time
-                        
-                        # Generar TTS per dir "Hola"
-                        gray_print("Persona detectada! Dient 'Hola'...")
-                        try:
-                            _time = time.strftime("%y-%m-%d_%H-%M-%S", time.localtime())
-                            _tts_f = os.path.join(tts_dir, f"greeting_{_time}_raw.wav")
-                            _tts_status = openai_helper.text_to_speech(
-                                "Hola", 
-                                _tts_f, 
-                                TTS_VOICE, 
-                                response_format='wav', 
-                                instructions=VOICE_INSTRUCTIONS
-                            )
-                            if _tts_status:
-                                tts_file = os.path.join(tts_dir, f"greeting_{_time}_{VOLUME_DB}dB.wav")
-                                _tts_status = sox_volume(_tts_f, tts_file, VOLUME_DB)
-                                if _tts_status:
-                                    # Activar la reproducció del so
-                                    with speech_lock:
-                                        speech_loaded = True
-                        except Exception as e:
-                            print(f'Error en TTS de salutació: {e}')
-            else:
-                # No hi ha persona detectada
-                with person_detection_lock:
-                    person_detected = False
-                    
-        except Exception as e:
-            print(f'Error en detecció de persones: {e}')
-        
-        time.sleep(0.2)  # Comprovar cada 200ms
-
-person_detection_thread = threading.Thread(target=person_detection_handler)
-person_detection_thread.daemon = True
-
-
-# visual tracking - seguiment visual activat per l'accó "seguir persona" (no per handler continu)
-# El thread es crea i s'inicia quan l'assistent retorna l'accó "seguir persona"; s'atura amb "aturar seguiment"
+# Visual tracking: inicialitzar el mòdul perquè start/stop estiguin disponibles des de preset_actions
 Vilib_module = Vilib if with_img and 'Vilib' in globals() else None
-visual_tracking_handler, visual_tracking_state, visual_tracking_lock, is_person_centered = create_visual_tracking_handler(
-    my_car, 
-    Vilib_module, 
-    with_img, 
-    DEFAULT_HEAD_TILT
-)
-visual_tracking_thread_ref = {'thread': None}
-
-# Accions de seguiment: l'assistent pot retornar en català o anglès
-ACTIONS_SEGUIR_PERSONA = frozenset({"seguir persona", "follow me", "follow"})
-ACTIONS_ATURAR_SEGUIMENT = frozenset({"aturar seguiment", "stop following", "stop follow"})
-
-
-def start_visual_tracking():
-    """Inicia el thread de seguiment visual (cridat quan l'assistent retorna l'accó 'seguir persona')."""
-    if not with_img:
-        return
-    with visual_tracking_lock:
-        visual_tracking_state['stop_requested'] = False
-    t = visual_tracking_thread_ref['thread']
-    if t is None or not t.is_alive():
-        t = threading.Thread(target=visual_tracking_handler)
-        t.daemon = True
-        visual_tracking_thread_ref['thread'] = t
-        t.start()
-        gray_print("Seguiment visual activat.")
-
-
-def stop_visual_tracking():
-    """Atura el thread de seguiment visual (cridat quan l'assistent retorna l'accó 'aturar seguiment')."""
-    with visual_tracking_lock:
-        visual_tracking_state['stop_requested'] = True
-    gray_print("Seguiment visual aturat.")
+create_visual_tracking_handler(my_car, Vilib_module, with_img, DEFAULT_HEAD_TILT)
 
 
 # Funcions auxiliars per a main()
@@ -584,7 +484,7 @@ def capture_image(current_path_val, vilib_module=None):
             raise ValueError("Vilib.img no està disponible")
         cv2.imwrite(img_path, vilib_module.img)
         return img_path
-    except (ValueError, AttributeError, Exception) as e:
+    except Exception as e:
         print(f'Warning: Could not write image file: {e}')
         # Try alternative location
         try:
@@ -608,7 +508,7 @@ def get_gpt_response(user_input, openai_helper_obj, with_img_flag, vilib_module=
     Returns:
         dict: Resposta de GPT
     """
-    gray_print(f'thinking ...')
+    gray_print('thinking ...')
     st = time.time()
 
     if with_img_flag:
@@ -858,10 +758,6 @@ def main():
 
     speak_thread.start()
     action_thread.start()
-    if with_img:
-        # person_detection_thread.start()  # Desactivat: no dir "Hola" automàticament
-        # El seguiment visual s'activa amb l'accó "seguir persona" de l'assistent, no aquí
-        pass
 
     # Sincronitzar refs compartides amb el fil d'accions
     action_status_ref['action_status'] = action_status
@@ -932,4 +828,3 @@ if __name__ == "__main__":
         if with_img:
             Vilib.camera_close()
         my_car.reset()
-
