@@ -52,7 +52,7 @@ class TestPresetActions(unittest.TestCase):
             self.assertTrue(callable(sound_func), f"Sound '{sound_name}' no és callable")
 
     def test_seguir_persona_aturar_seguiment_callable(self):
-        """Test que seguir_persona i aturar_seguiment són callable (placeholders gestionats a gpt_car)"""
+        """Test que seguir_persona i aturar_seguiment són callable (executen start/stop a visual_tracking)."""
         self.assertTrue(callable(seguir_persona))
         self.assertTrue(callable(aturar_seguiment))
 

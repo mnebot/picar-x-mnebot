@@ -1,7 +1,8 @@
-
 from time import sleep
 import random
 from math import sin, cos, pi
+
+import visual_tracking
 
 def wave_hands(car):
     car.reset()
@@ -258,13 +259,13 @@ def donar_la_volta(car):
 
 
 def seguir_persona(car):
-    """Placeholder: l'accó 'seguir persona' es gestiona a gpt_car (inicia el thread de seguiment)."""
-    pass
+    """Inicia el seguiment visual via el mòdul visual_tracking (pan/tilt i moviment reactiu)."""
+    visual_tracking.start_visual_tracking()
 
 
 def aturar_seguiment(car):
-    """Placeholder: l'accó 'aturar seguiment' es gestiona a gpt_car (atura el thread de seguiment)."""
-    pass
+    """Atura el seguiment visual via el mòdul visual_tracking."""
+    visual_tracking.stop_visual_tracking()
 
 
 actions_dict = {

@@ -241,32 +241,40 @@ class TestExecuteActionsList(unittest.TestCase):
         return car, action_status_ref
 
     @patch('gpt_car.time.sleep')
-    def test_seguir_persona_crida_start_visual_tracking(self, mock_sleep):
-        """Quan l'accó és 'seguir persona' es crida start_visual_tracking"""
-        with patch.object(gpt_car, 'start_visual_tracking', MagicMock()) as mock_start:
-            self._run_execute(["seguir persona"])
-        mock_start.assert_called_once()
+    def test_seguir_persona_crida_accio_seguir(self, mock_sleep):
+        """Quan l'accó és 'seguir persona' es crida la funció d'accó (via actions_dict)."""
+        car = Mock()
+        mock_seguir = MagicMock()
+        with patch.object(gpt_car, 'actions_dict', {'seguir persona': mock_seguir}):
+            self._run_execute(["seguir persona"], car=car)
+        mock_seguir.assert_called_once_with(car)
 
     @patch('gpt_car.time.sleep')
-    def test_follow_me_crida_start_visual_tracking(self, mock_sleep):
-        """Quan l'accó és 'follow me' es crida start_visual_tracking"""
-        with patch.object(gpt_car, 'start_visual_tracking', MagicMock()) as mock_start:
-            self._run_execute(["follow me"])
-        mock_start.assert_called_once()
+    def test_follow_me_crida_accio_seguir(self, mock_sleep):
+        """Quan l'accó és 'follow me' es crida la funció d'accó (via actions_dict)."""
+        car = Mock()
+        mock_seguir = MagicMock()
+        with patch.object(gpt_car, 'actions_dict', {'follow me': mock_seguir}):
+            self._run_execute(["follow me"], car=car)
+        mock_seguir.assert_called_once_with(car)
 
     @patch('gpt_car.time.sleep')
-    def test_aturar_seguiment_crida_stop_visual_tracking(self, mock_sleep):
-        """Quan l'accó és 'aturar seguiment' es crida stop_visual_tracking"""
-        with patch.object(gpt_car, 'stop_visual_tracking', MagicMock()) as mock_stop:
-            self._run_execute(["aturar seguiment"])
-        mock_stop.assert_called_once()
+    def test_aturar_seguiment_crida_accio_aturar(self, mock_sleep):
+        """Quan l'accó és 'aturar seguiment' es crida la funció d'accó (via actions_dict)."""
+        car = Mock()
+        mock_aturar = MagicMock()
+        with patch.object(gpt_car, 'actions_dict', {'aturar seguiment': mock_aturar}):
+            self._run_execute(["aturar seguiment"], car=car)
+        mock_aturar.assert_called_once_with(car)
 
     @patch('gpt_car.time.sleep')
-    def test_stop_following_crida_stop_visual_tracking(self, mock_sleep):
-        """Quan l'accó és 'stop following' es crida stop_visual_tracking"""
-        with patch.object(gpt_car, 'stop_visual_tracking', MagicMock()) as mock_stop:
-            self._run_execute(["stop following"])
-        mock_stop.assert_called_once()
+    def test_stop_following_crida_accio_aturar(self, mock_sleep):
+        """Quan l'accó és 'stop following' es crida la funció d'accó (via actions_dict)."""
+        car = Mock()
+        mock_aturar = MagicMock()
+        with patch.object(gpt_car, 'actions_dict', {'stop following': mock_aturar}):
+            self._run_execute(["stop following"], car=car)
+        mock_aturar.assert_called_once_with(car)
 
     @patch('gpt_car.time.sleep')
     def test_accio_normal_crida_actions_dict(self, mock_sleep):
@@ -279,19 +287,25 @@ class TestExecuteActionsList(unittest.TestCase):
     @patch('gpt_car.time.sleep')
     def test_accio_done_al_final(self, mock_sleep):
         """Després d'executar la llista, action_status es posa a 'actions_done'"""
-        with patch.object(gpt_car, 'start_visual_tracking', MagicMock()):
+        mock_seguir = MagicMock()
+        with patch.object(gpt_car, 'actions_dict', {'seguir persona': mock_seguir}):
             action_status_ref = {'action_status': 'actions'}
             self._run_execute(["seguir persona"], action_status_ref=action_status_ref)
         self.assertEqual(action_status_ref['action_status'], 'actions_done')
 
     @patch('gpt_car.time.sleep')
     def test_seguir_i_aturar_ambdues_cridades(self, mock_sleep):
-        """Llista amb 'seguir persona' i 'aturar seguiment' crida ambdues funcions"""
-        with patch.object(gpt_car, 'start_visual_tracking', MagicMock()) as mock_start:
-            with patch.object(gpt_car, 'stop_visual_tracking', MagicMock()) as mock_stop:
-                self._run_execute(["seguir persona", "aturar seguiment"])
-        mock_start.assert_called_once()
-        mock_stop.assert_called_once()
+        """Llista amb 'seguir persona' i 'aturar seguiment' crida ambdues funcions (via actions_dict)."""
+        mock_seguir = MagicMock()
+        mock_aturar = MagicMock()
+        with patch.object(gpt_car, 'actions_dict', {
+            'seguir persona': mock_seguir,
+            'aturar seguiment': mock_aturar,
+        }):
+            car = Mock()
+            self._run_execute(["seguir persona", "aturar seguiment"], car=car)
+        mock_seguir.assert_called_once_with(car)
+        mock_aturar.assert_called_once_with(car)
 
     @patch('gpt_car.time.sleep')
     def test_exception_en_accio_continua_i_marques_actions_done(self, mock_sleep):
@@ -301,41 +315,6 @@ class TestExecuteActionsList(unittest.TestCase):
             action_status_ref = {'action_status': 'actions'}
             self._run_execute(["nod"], action_status_ref=action_status_ref)
         self.assertEqual(action_status_ref['action_status'], 'actions_done')
-
-
-class TestStartVisualTracking(unittest.TestCase):
-    """Tests que executen el cos de start_visual_tracking() per cobertura"""
-
-    def test_retorna_quan_no_with_img(self):
-        """Quan with_img és False no fa res i retorna"""
-        with patch.object(gpt_car, 'with_img', False):
-            gpt_car.start_visual_tracking()
-        # No hauria d'haver cridat thread.start ni gray_print
-
-    def test_with_img_inicia_thread_si_no_viu(self):
-        """Quan with_img és True i el thread no existeix o no viu, inicia el thread"""
-        mock_handler = MagicMock()
-        with patch.object(gpt_car, 'with_img', True):
-            with patch.object(gpt_car, 'visual_tracking_handler', mock_handler):
-                with patch.object(gpt_car, 'visual_tracking_lock', MagicMock()):
-                    with patch.object(gpt_car, 'visual_tracking_state', {'stop_requested': True}):
-                        ref = {'thread': None}
-                        with patch.object(gpt_car, 'visual_tracking_thread_ref', ref):
-                            gpt_car.start_visual_tracking()
-        self.assertIsNotNone(ref['thread'])
-        self.assertTrue(ref['thread'].daemon)
-
-
-class TestStopVisualTracking(unittest.TestCase):
-    """Tests que executen el cos de stop_visual_tracking() per cobertura"""
-
-    def test_posa_stop_requested_i_imprimeix(self):
-        """Posem stop_requested a True (comportament de stop_visual_tracking)"""
-        state = {'stop_requested': False}
-        with patch.object(gpt_car, 'visual_tracking_lock', MagicMock()):
-            with patch.object(gpt_car, 'visual_tracking_state', state):
-                gpt_car.stop_visual_tracking()
-        self.assertTrue(state['stop_requested'])
 
 
 class TestHandleActionState(unittest.TestCase):
@@ -939,18 +918,6 @@ class TestSpeakHandler(unittest.TestCase):
         finally:
             gpt_car.speech_loaded = original_speech_loaded
             gpt_car.tts_file = original_tts_file
-
-
-class TestPersonDetectionHandler(unittest.TestCase):
-    """Tests per a person_detection_handler()"""
-    
-    
-    @patch('gpt_car.with_img', False)
-    def test_person_detection_handler_no_img(self):
-        """Test que person_detection_handler retorna quan no hi ha imatge"""
-        # Quan with_img és False, la funció hauria de retornar immediatament
-        # No podem executar el bucle infinit, però podem verificar la lògica
-        self.assertTrue(hasattr(gpt_car, 'person_detection_handler'))
 
 
 class TestActionHandler(unittest.TestCase):
