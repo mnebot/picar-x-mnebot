@@ -1,5 +1,9 @@
+import keys
 from openai_helper import OpenAiHelper
 from keys import OPENAI_API_KEY, OPENAI_ASSISTANT_ID
+# OPENAI_PROMPT_ID (preferit) o OPENAI_MODEL; si no, OPENAI_ASSISTANT_ID (compat)
+_OPENAI_PROMPT_ID = getattr(keys, 'OPENAI_PROMPT_ID', None)
+_OPENAI_MODEL = getattr(keys, 'OPENAI_MODEL', None)
 from preset_actions import actions_dict, sounds_dict
 from utils import gray_print, speak_block, sox_volume, redirect_error_2_null, cancel_redirect_error
 from visual_tracking import create_visual_tracking_handler
@@ -72,9 +76,14 @@ if '--no-img' in args:
 else:
     with_img = True
 
-# openai assistant init
+# openai init (Responses API)
 # =================================================================
-openai_helper = OpenAiHelper(OPENAI_API_KEY, OPENAI_ASSISTANT_ID, 'picarx')
+_openai_model_or_prompt = _OPENAI_PROMPT_ID or _OPENAI_MODEL or OPENAI_ASSISTANT_ID
+_instructions_path = os.path.join(current_path, 'assistents', 'arnau.txt')
+openai_helper = OpenAiHelper(
+    OPENAI_API_KEY, _openai_model_or_prompt, 'picarx',
+    instructions_path=_instructions_path
+)
 
 LANGUAGE = 'ca'  # Catalan language code for STT
 VOLUME_DB = 3

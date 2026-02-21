@@ -1,50 +1,58 @@
+"""
+OpenAI API helper - Responses API (replaces deprecated Assistants API).
+"""
 from openai import OpenAI
 import time
-import shutil
 import os
 import json
 
 # utils
 # =================================================================
 def chat_print(label, message):
-    # --- normal print ---
     print(f'{time.time():.3f} {label:>6} >>> {message}')
 
-# OpenAiHelper
+# OpenAiHelper - Responses API
 # =================================================================
 class OpenAiHelper():
     STT_OUT = "stt_output.wav"
     TTS_OUTPUT_FILE = 'tts_output.mp3'
-    TIMEOUT = 30 # seconds
+    TIMEOUT = 30  # seconds
+    DEFAULT_MODEL = "gpt-4.1-mini"
 
-    def __init__(self, api_key, assistant_id, assistant_name, timeout=TIMEOUT) -> None:
-        
+    def __init__(self, api_key, model_or_prompt_id=None, assistant_name='assistant',
+                 instructions_path=None, timeout=TIMEOUT):
+        """
+        model_or_prompt_id: model (e.g. "gpt-4.1-mini") o prompt_id (començant per "prompt_")
+                           Si és "asst_xxx" (legacy), s'ignora i s'usa DEFAULT_MODEL.
+        """
         self.api_key = api_key
-        self.assistant_id = assistant_id
+        self.client = OpenAI(api_key=api_key, timeout=timeout)
+        self._last_response_id = None
+        self._instructions = None
         self.assistant_name = assistant_name
 
-        self.client = OpenAI(api_key=api_key, timeout=timeout)
-        self.thread = self.client.beta.threads.create()
-        self.run = self.client.beta.threads.runs.create_and_poll(
-            thread_id=self.thread.id,
-            assistant_id=assistant_id,
-        )
+        if model_or_prompt_id and str(model_or_prompt_id).startswith("prompt_"):
+            self.prompt_id = model_or_prompt_id
+            self.model = None
+        else:
+            self.prompt_id = None
+            self.model = model_or_prompt_id or self.DEFAULT_MODEL
+
+        if instructions_path and os.path.isfile(instructions_path):
+            with open(instructions_path, 'r', encoding='utf-8') as f:
+                self._instructions = f.read()
 
     def stt(self, audio, language='en'):
         try:
-            import wave
             from io import BytesIO
-
             wav_data = BytesIO(audio.get_wav_data())
             wav_data.name = self.STT_OUT
-
             transcript = self.client.audio.transcriptions.create(
-                model="whisper-1", 
+                model="whisper-1",
                 file=wav_data,
                 language=language,
                 prompt="aquesta és una conversa entre jo i un robot"
             )
-
             return transcript.text
         except Exception as e:
             print(f"stt err:{e}")
@@ -52,8 +60,6 @@ class OpenAiHelper():
 
     def speech_recognition_stt(self, recognizer, audio):
         import speech_recognition as sr
-
-        # recognize speech using Whisper API
         try:
             return recognizer.recognize_whisper_api(audio, api_key=self.api_key)
         except sr.RequestError as e:
@@ -61,105 +67,82 @@ class OpenAiHelper():
             return False
 
     def _prepare_message_with_language(self, msg):
-        """Prepara el missatge afegint la instrucció de llengua."""
         return f"Respon sempre en català. {msg}"
 
     def _parse_response_value(self, value):
-        """Intenta parsejar el valor com JSON, retorna string si falla."""
         try:
-            return json.loads(value)  # Convertir JSON string a dict de forma segura
+            return json.loads(value)
         except (TypeError, ValueError):
             return str(value)
 
-    def _extract_assistant_response(self, messages):
-        """Extreu la resposta de l'assistent dels missatges."""
-        for message in messages.data:
-            if message.role == 'assistant':
-                for block in message.content:
-                    if block.type == 'text':
-                        value = block.text.value
-                        chat_print(self.assistant_name, value)
-                        return self._parse_response_value(value)
-            break  # only last reply
-        return None
-
-    def _process_run_response(self, run):
-        """Processa el run i retorna la resposta de l'assistent o None."""
-        if run.status == 'completed': 
-            messages = self.client.beta.threads.messages.list(
-                thread_id=self.thread.id
-            )
-            return self._extract_assistant_response(messages)
+    def _call_responses_api(self, input_items):
+        """Crida la Responses API i retorna la resposta parsejada o None."""
+        kwargs = {
+            "input": input_items,
+            "store": True,
+        }
+        if self.prompt_id:
+            kwargs["prompt"] = {"prompt_id": self.prompt_id}
         else:
-            print(f"Run status: {run.status}")
-            if hasattr(run, 'last_error') and run.last_error is not None:
-                err = run.last_error
+            kwargs["model"] = self.model
+            if self._instructions:
+                kwargs["instructions"] = self._instructions
+            else:
+                kwargs["instructions"] = "Respon en català. Format JSON: {\"actions\": [...], \"answer\": \"...\"}"
+        if self._last_response_id:
+            kwargs["previous_response_id"] = self._last_response_id
+
+        try:
+            response = self.client.responses.create(**kwargs)
+        except Exception as e:
+            print(f"Responses API err: {e}")
+            return None
+
+        if response.status != "completed":
+            print(f"Response status: {response.status}")
+            if hasattr(response, 'last_error') and response.last_error is not None:
+                err = response.last_error
                 code = getattr(err, 'code', '?')
                 msg = getattr(err, 'message', str(err))
-                print(f"Run last_error: code={code}, message={msg}")
+                print(f"Response last_error: code={code}, message={msg}")
             return None
+
+        self._last_response_id = response.id
+        text = getattr(response, 'output_text', None) or ""
+        if text:
+            chat_print(self.assistant_name, text)
+            return self._parse_response_value(text)
+        return None
 
     def dialogue(self, msg):
         chat_print("user", msg)
         msg_with_lang = self._prepare_message_with_language(msg)
-        self.client.beta.threads.messages.create(
-            thread_id=self.thread.id,
-            role="user",
-            content=msg_with_lang
-        )
-        run = self.client.beta.threads.runs.create_and_poll(
-            thread_id=self.thread.id,
-            assistant_id=self.assistant_id,
-        )
-        return self._process_run_response(run)
-
+        return self._call_responses_api(msg_with_lang)
 
     def dialogue_with_img(self, msg, img_path):
-        chat_print(f"user", msg)
-
-        # Utilitzar context manager per assegurar que el fitxer es tanqui correctament
-        with open(img_path, "rb") as img_file_handle:
-            img_file = self.client.files.create(
-                        file=img_file_handle,
-                        purpose="vision"
-                    )
-
+        chat_print("user", msg)
+        with open(img_path, "rb") as f:
+            img_file = self.client.files.create(file=f, purpose="vision")
         msg_with_lang = self._prepare_message_with_language(msg)
-
-        self.client.beta.threads.messages.create(
-            thread_id=self.thread.id,
-            role="user",
-            content=[
-                {
-                    "type": "text",
-                    "text": msg_with_lang
-                },
-                {
-                    "type": "image_file",
-                    "image_file": {"file_id": img_file.id}
-                }
-            ],
-        )
-        run = self.client.beta.threads.runs.create_and_poll(
-            thread_id=self.thread.id,
-            assistant_id=self.assistant_id,
-        )
-        return self._process_run_response(run)
-
+        input_items = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": msg_with_lang},
+                    {"type": "input_image", "file_id": img_file.id},
+                ],
+            }
+        ]
+        return self._call_responses_api(input_items)
 
     def text_to_speech(self, text, output_file, voice='alloy', response_format="mp3", speed=1, instructions=''):
-        '''
-        voice: alloy, echo, fable, onyx, nova, and shimmer
-        '''
         try:
-            # check dir
-            dir = os.path.dirname(output_file)
-            if not os.path.exists(dir):
-                os.mkdir(dir)
-            elif not os.path.isdir(dir):
-                raise FileExistsError(f"\'{dir}\' is not a directory")
+            dir_path = os.path.dirname(output_file)
+            if not os.path.exists(dir_path):
+                os.makedirs(dir_path, mode=0o755, exist_ok=True)
+            elif not os.path.isdir(dir_path):
+                raise FileExistsError(f"'{dir_path}' is not a directory")
 
-            # tts
             with self.client.audio.speech.with_streaming_response.create(
                 model="gpt-4o-mini-tts",
                 voice=voice,
@@ -169,9 +152,7 @@ class OpenAiHelper():
                 instructions=instructions,
             ) as response:
                 response.stream_to_file(output_file)
-
             return True
         except Exception as e:
             print(f'tts err: {e}')
             return False
-
