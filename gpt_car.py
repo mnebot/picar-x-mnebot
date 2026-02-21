@@ -2,7 +2,7 @@ import keys
 from openai_helper import OpenAiHelper
 from keys import OPENAI_API_KEY, OPENAI_ASSISTANT_ID
 # OPENAI_PROMPT_ID (preferit) o OPENAI_MODEL; si no, OPENAI_ASSISTANT_ID (compat)
-_OPENAI_PROMPT_ID = getattr(keys, 'OPENAI_PROMPT_ID', None)
+_OPENAI_PROMPT_ID = getattr(keys, 'OPENAI_ASSISTANT_ID', None)
 _OPENAI_MODEL = getattr(keys, 'OPENAI_MODEL', None)
 from preset_actions import actions_dict, sounds_dict
 from utils import gray_print, speak_block, sox_volume, redirect_error_2_null, cancel_redirect_error
