@@ -1,4 +1,4 @@
-import keys
+import keys  # pyright: ignore[reportMissingImports]
 from openai_helper import OpenAiHelper
 from keys import OPENAI_API_KEY, OPENAI_ASSISTANT_ID
 # OPENAI_PROMPT_ID (preferit) o OPENAI_MODEL; si no, OPENAI_ASSISTANT_ID (compat)
