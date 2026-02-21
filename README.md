@@ -128,7 +128,7 @@ Opcions disponibles:
 - `preset_actions.py`: Accions predefinides del robot (moviments, gestos, sons)
 - `utils.py`: Funcions auxiliars (TTS,<> processament de so, etc.)
 - `visual_tracking.py`: Funcionalitat de seguiment visual
-- `sounds/`: Fitxers d'àudio per als efectes de so
+- `sounds/`: Fitxers d'àudio per als efectes de so. Per la sardana (cantar i ballar), afegeix `sounds/sardana.wav` (música de sardana instrumental).
 - `tests/`: Tests unitaris del projecte
 
 ## Tests

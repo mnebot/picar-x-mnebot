@@ -29,6 +29,7 @@ from preset_actions import (
     wave_hands, resist, act_cute, rub_hands, think, keep_think,
     shake_head, nod, depressed, twist_body, celebrate,
     honking, start_engine, advance_20cm, donar_la_volta,
+    ballar_sardana, sardana,
     seguir_persona, aturar_seguiment,
 )
 
@@ -82,6 +83,25 @@ class TestPresetActions(unittest.TestCase):
         self.mock_car.backward.assert_called_once()
         self.mock_car.forward.assert_called_once()
         self.assertGreaterEqual(self.mock_car.set_dir_servo_angle.call_count, 2)
+
+    @patch('preset_actions.sleep')
+    def test_ballar_sardana_accio_disponible_i_callable(self, mock_sleep):
+        """Test que 'ballar sardana' està al diccionari i es pot cridar amb un mock"""
+        self.assertIn("ballar sardana", actions_dict)
+        self.assertIn("ballar una sardana", actions_dict)
+        self.assertIs(actions_dict["ballar sardana"], ballar_sardana)
+        ballar_sardana(self.mock_car)
+        self.assertGreaterEqual(self.mock_car.reset.call_count, 1)
+        self.assertGreaterEqual(self.mock_car.forward.call_count, 1)
+        self.assertGreaterEqual(self.mock_car.set_dir_servo_angle.call_count, 1)
+
+    def test_sardana_so_disponible_i_callable(self):
+        """Test que 'sardana' està a sounds_dict i es pot cridar amb un mock"""
+        self.assertIn("sardana", sounds_dict)
+        self.assertIn("cantar sardana", sounds_dict)
+        self.assertIs(sounds_dict["sardana"], sardana)
+        sardana(self.mock_music)
+        # sense fitxer sounds/sardana.wav no crida sound_play_threading; en test normalment no existeix
 
 
 if __name__ == '__main__':

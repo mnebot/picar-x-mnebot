@@ -92,7 +92,7 @@ TTS_VOICE = 'echo'
 # https://www.openai.fm/
 VOICE_INSTRUCTIONS = ""
 
-SOUND_EFFECT_ACTIONS = ["honking", "start engine"]
+SOUND_EFFECT_ACTIONS = ["honking", "start engine", "sardana"]
 
 # car init 
 try:
