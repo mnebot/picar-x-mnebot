@@ -92,6 +92,11 @@ class OpenAiHelper():
             return self._extract_assistant_response(messages)
         else:
             print(f"Run status: {run.status}")
+            if hasattr(run, 'last_error') and run.last_error is not None:
+                err = run.last_error
+                code = getattr(err, 'code', '?')
+                msg = getattr(err, 'message', str(err))
+                print(f"Run last_error: code={code}, message={msg}")
             return None
 
     def dialogue(self, msg):
