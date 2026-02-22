@@ -73,10 +73,12 @@ os.makedirs(tts_dir, mode=0o755, exist_ok=True)
 
 # openai init (Responses API)
 # =================================================================
+instructions_path = os.path.join(current_path, 'assistents', 'arnau.txt')
 openai_helper = OpenAiHelper(
     api_key=OPENAI_API_KEY,
     model_or_prompt_id=OPENAI_MODEL,
-    assistant_name=ASSISTANT_NAME
+    assistant_name=ASSISTANT_NAME,
+    instructions_path=instructions_path
 )
 
 # Validar VOLUME_DB dins d'un rang raonable (0-10 per evitar distorsió)
