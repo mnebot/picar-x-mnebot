@@ -217,6 +217,77 @@ def celebrate(car):
     car.set_cam_pan_angle(0)
     sleep(.2)
 
+def ballar_sardana(car):
+    """Coreografia inspirada en la sardana: balancejos rítmics, passos curts i llargs, ~35 s."""
+    car.reset()
+    car.set_cam_tilt_angle(15)
+    beat = 0.5  # ritme 2/4, ~2 passos/segon
+    speed = 25
+
+    # Fase 1: balancejos amb pan/tilt i direcció (passos curts)
+    for _ in range(8):
+        car.set_dir_servo_angle(-20)
+        car.set_cam_pan_angle(-25)
+        sleep(beat)
+        car.set_dir_servo_angle(20)
+        car.set_cam_pan_angle(25)
+        sleep(beat)
+    car.set_dir_servo_angle(0)
+    car.set_cam_pan_angle(0)
+
+    # Fase 2: passos curts endavant-enrere (com passos de sardana)
+    for _ in range(4):
+        car.forward(speed)
+        sleep(beat)
+        car.stop()
+        sleep(0.1)
+        car.backward(speed)
+        sleep(beat)
+        car.stop()
+        sleep(0.1)
+
+    # Fase 3: balancejos més amples (passos llargs)
+    for _ in range(8):
+        car.set_dir_servo_angle(-30)
+        car.set_cam_pan_angle(-40)
+        car.set_cam_tilt_angle(10)
+        sleep(beat)
+        car.set_dir_servo_angle(30)
+        car.set_cam_pan_angle(40)
+        car.set_cam_tilt_angle(20)
+        sleep(beat)
+    car.set_dir_servo_angle(0)
+    car.set_cam_pan_angle(0)
+    car.set_cam_tilt_angle(15)
+
+    # Fase 4: moviment circular suau (girar com en cercle)
+    car.set_dir_servo_angle(-25)
+    car.forward(speed)
+    sleep(2.0)
+    car.stop()
+    car.set_dir_servo_angle(25)
+    car.forward(speed)
+    sleep(2.0)
+    car.stop()
+
+    car.set_dir_servo_angle(0)
+    car.reset()
+
+
+def sardana(music):
+    """Reprodueix música de sardana. Fallback si el fitxer no existeix."""
+    import os
+    import utils
+    path = "sounds/sardana.wav"
+    if not os.path.isfile(path):
+        utils.warn(f"Fitxer {path} no trobat. Afegeix música de sardana per escoltar-la.")
+        return
+    try:
+        music.sound_play_threading(path, 80)
+    except Exception as e:
+        utils.warn(f"No s'ha pogut reproduir {path}: {e}")
+
+
 def honking(music):
     import utils
     music.sound_play_threading("sounds/car-double-horn.wav", 100)
@@ -292,11 +363,15 @@ actions_dict = {
     "aturar seguiment": aturar_seguiment,
     "stop following": aturar_seguiment,
     "stop follow": aturar_seguiment,
+    "ballar sardana": ballar_sardana,
+    "ballar una sardana": ballar_sardana,
 }
 
 sounds_dict = {
     "honking": honking,
     "start engine": start_engine,
+    "sardana": sardana,
+    "cantar sardana": sardana,
 }
 
 
