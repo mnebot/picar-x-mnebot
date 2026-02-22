@@ -63,7 +63,7 @@ try:
     proc.close()  # Tancar el procés per evitar resource leaks
 except Exception as e:
     print(f'Warning: Could not enable speaker switch: {e}')
-    
+
 current_path = os.path.dirname(os.path.abspath(__file__))
 os.chdir(current_path) # change working directory
 
@@ -403,12 +403,6 @@ def get_user_input(input_mode_val, recognizer_obj, openai_helper_obj, language,
         if result is None:
             return (None, True, False, input_mode_val)
         return (result, False, False, input_mode_val)
-    elif input_mode_val == 'keyboard':
-        result, should_continue, input_mode_changed = get_keyboard_input(
-            action_lock_ref, action_status_ref, car, with_img_flag
-        )
-        new_mode = 'voice' if input_mode_changed else input_mode_val
-        return (result, should_continue, input_mode_changed, new_mode)
     else:
         raise ValueError("Invalid input mode")
 
