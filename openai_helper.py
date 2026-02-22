@@ -18,12 +18,13 @@ class OpenAiHelper():
     TTS_OUTPUT_FILE = 'tts_output.mp3'
     TIMEOUT = 30  # seconds
 
-    def __init__(self, api_key, assistant_id=None, timeout=None):
+
+    def __init__(self, api_key, prompt_id=None, timeout=None):
         if timeout is None:
             timeout = self.TIMEOUT
         self.api_key = api_key
-        self.assistant_id = assistant_id
-        self.client = OpenAI(api_key=api_key, assistant_id=assistant_id, timeout=timeout)
+        self.client = OpenAI(api_key=api_key, timeout=timeout)
+        self.prompt_id = prompt_id
         self._last_response_id = None
 
     def stt(self, audio, language='en'):
@@ -62,6 +63,7 @@ class OpenAiHelper():
     def _call_responses_api(self, input_items):
         """Crida la Responses API i retorna la resposta parsejada o None."""
         kwargs = {
+            "prompt_id": self.prompt_id,
             "input": input_items,
             "store": True,
         }

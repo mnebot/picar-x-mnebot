@@ -19,7 +19,7 @@ from vilib import Vilib
 
 # Local
 import keys  # pyright: ignore[reportMissingImports]
-from keys import OPENAI_API_KEY, OPENAI_ASSISTANT_ID
+from keys import OPENAI_API_KEY, OPENAI_PROMPT_ID
 from openai_helper import OpenAiHelper
 from preset_actions import actions_dict, sounds_dict
 from utils import cancel_redirect_error, gray_print, redirect_error_2_null, sox_volume, speak_block
@@ -74,9 +74,10 @@ os.makedirs(tts_dir, mode=0o755, exist_ok=True)
 # openai init (Responses API)
 # =================================================================
 openai_helper = OpenAiHelper(
-    api_key=OPENAI_API_KEY, 
-    assistant_id=OPENAI_ASSISTANT_ID
+    api_key=OPENAI_API_KEY,
+    prompt_id=OPENAI_PROMPT_ID
 )
+
 
 # Validar VOLUME_DB dins d'un rang raonable (0-10 per evitar distorsió)
 if not isinstance(VOLUME_DB, (int, float)) or VOLUME_DB < 0 or VOLUME_DB > 10:
