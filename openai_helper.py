@@ -63,7 +63,7 @@ class OpenAiHelper():
     def _call_responses_api(self, input_items):
         """Crida la Responses API i retorna la resposta parsejada o None."""
         kwargs = {
-            "prompt_id": self.prompt_id,
+            "prompt": {id : self.prompt_id},
             "input": input_items,
             "store": True,
         }
