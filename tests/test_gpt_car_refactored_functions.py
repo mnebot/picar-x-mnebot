@@ -566,61 +566,6 @@ class TestGetVoiceInput(unittest.TestCase):
         self.assertIsNone(result)
 
 
-class TestGetKeyboardInput(unittest.TestCase):
-    """Tests per a get_keyboard_input()"""
-    
-    @patch('gpt_car.reset_camera_if_needed')
-    @patch('builtins.input')
-    def test_get_keyboard_input_success(self, mock_input, mock_reset):
-        """Test obtenir input de teclat exitós"""
-        mock_input.return_value = "Hola"
-        action_lock_ref = threading.Lock()
-        action_status_ref = {'action_status': 'standby'}
-        mock_car = Mock()
-        
-        result, should_continue, input_mode_changed = gpt_car.get_keyboard_input(
-            action_lock_ref, action_status_ref, mock_car, False
-        )
-        
-        self.assertEqual(result, "Hola")
-        self.assertFalse(should_continue)
-        self.assertFalse(input_mode_changed)
-    
-    @patch('gpt_car.reset_camera_if_needed')
-    @patch('builtins.input')
-    def test_get_keyboard_input_empty(self, mock_input, mock_reset):
-        """Test obtenir input de teclat buit"""
-        mock_input.return_value = ""
-        action_lock_ref = threading.Lock()
-        action_status_ref = {'action_status': 'standby'}
-        mock_car = Mock()
-        
-        result, should_continue, input_mode_changed = gpt_car.get_keyboard_input(
-            action_lock_ref, action_status_ref, mock_car, False
-        )
-        
-        self.assertIsNone(result)
-        self.assertTrue(should_continue)
-        self.assertFalse(input_mode_changed)
-    
-    @patch('gpt_car.reset_camera_if_needed')
-    @patch('builtins.input')
-    def test_get_keyboard_input_eoferror(self, mock_input, mock_reset):
-        """Test obtenir input de teclat amb EOFError"""
-        mock_input.side_effect = EOFError("No TTY")
-        action_lock_ref = threading.Lock()
-        action_status_ref = {'action_status': 'standby'}
-        mock_car = Mock()
-        
-        result, should_continue, input_mode_changed = gpt_car.get_keyboard_input(
-            action_lock_ref, action_status_ref, mock_car, False
-        )
-        
-        self.assertIsNone(result)
-        self.assertTrue(should_continue)
-        self.assertTrue(input_mode_changed)
-
-
 class TestGetUserInput(unittest.TestCase):
     """Tests per a get_user_input()"""
     
@@ -1115,6 +1060,10 @@ class TestModuleLevelCode(unittest.TestCase):
         # Verificar que la constant existeix
         self.assertTrue(hasattr(gpt_car, 'SOUND_EFFECT_ACTIONS'))
         self.assertIsInstance(gpt_car.SOUND_EFFECT_ACTIONS, list)
+
+    def test_sound_effect_actions_inclou_sardana(self):
+        """Test que SOUND_EFFECT_ACTIONS inclou sardana (nova acció de la branca)"""
+        self.assertIn("sardana", gpt_car.SOUND_EFFECT_ACTIONS)
     
     def test_default_head_angles(self):
         """Test que els angles per defecte estan definits"""

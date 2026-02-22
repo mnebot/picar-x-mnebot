@@ -64,10 +64,10 @@ class TestGptCarModuleExecution(unittest.TestCase):
     @patch('gpt_car.os.popen')
     @patch('gpt_car.os.makedirs')
     @patch('gpt_car.os.chdir')
-    @patch('gpt_car.sys.argv', ['gpt_car.py', '--no-img'])
+    @patch('gpt_car.sys.argv', ['gpt_car.py'])
     @patch('gpt_car.sys.stdin.isatty', return_value=False)
     @patch('gpt_car.time.sleep')
-    def test_module_level_code_execution_no_img(self, mock_sleep, mock_isatty, mock_chdir,
+    def test_module_level_code_execution_img(self, mock_sleep, mock_isatty, mock_chdir,
                                                   mock_makedirs, mock_popen):
         """Test que executa el codi a nivell de mòdul sense imatge"""
         mock_proc = Mock()
@@ -85,37 +85,11 @@ class TestGptCarModuleExecution(unittest.TestCase):
                 # Verificar que s'han executat parts del codi
                 self.assertTrue(hasattr(gpt_car, 'input_mode'))
                 self.assertTrue(hasattr(gpt_car, 'with_img'))
-                self.assertFalse(gpt_car.with_img)
+                self.assertTrue(gpt_car.with_img)
             except Exception as e:
                 # Si falla per alguna raó, verificar que és un error esperat
                 self.assertIsInstance(e, (ImportError, AttributeError, RuntimeError))
     
-    @patch('gpt_car.os.popen')
-    @patch('gpt_car.os.makedirs')
-    @patch('gpt_car.os.chdir')
-    @patch('gpt_car.sys.argv', ['gpt_car.py', '--keyboard'])
-    @patch('gpt_car.sys.stdin.isatty', return_value=True)
-    @patch('gpt_car.time.sleep')
-    def test_module_level_code_execution_keyboard(self, mock_sleep, mock_isatty, mock_chdir,
-                                                    mock_makedirs, mock_popen):
-        """Test que executa el codi a nivell de mòdul amb mode keyboard"""
-        mock_proc = Mock()
-        mock_proc.close = Mock()
-        mock_popen.return_value = mock_proc
-        
-        mock_openai_helper = Mock()
-        with patch('gpt_car.OpenAiHelper', return_value=mock_openai_helper):
-            try:
-                if 'gpt_car' in sys.modules:
-                    del sys.modules['gpt_car']
-                import gpt_car
-                self.assertTrue(hasattr(gpt_car, 'input_mode'))
-                self.assertEqual(gpt_car.input_mode, 'keyboard')
-            except Exception as e:
-                self.assertIsInstance(e, (ImportError, AttributeError, RuntimeError))
-    
-
-
 class TestGptCarHandlersExecution(unittest.TestCase):
     """Tests que executen les funcions handler reals"""
     

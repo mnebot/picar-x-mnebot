@@ -1,32 +1,49 @@
-import keys  # pyright: ignore[reportMissingImports]
-from openai_helper import OpenAiHelper
-from keys import OPENAI_API_KEY, OPENAI_ASSISTANT_ID
-# OPENAI_PROMPT_ID (preferit) o OPENAI_MODEL; si no, OPENAI_ASSISTANT_ID (compat)
-_OPENAI_PROMPT_ID = getattr(keys, 'OPENAI_ASSISTANT_ID', None)
-_OPENAI_MODEL = getattr(keys, 'OPENAI_MODEL', None)
-from preset_actions import actions_dict, sounds_dict
-from utils import gray_print, speak_block, sox_volume, redirect_error_2_null, cancel_redirect_error
-from visual_tracking import create_visual_tracking_handler
-
-# readline només s'utilitza per optimitzar input de teclat, però pot fallar sense TTY
+# Standard library
+import os
+import random
+import sys
+import tempfile
+import threading
+import time
 try:
-    import readline  # optimize keyboard input, only need to import
+    import readline
 except (ImportError, OSError):
-    # Si readline no està disponible o no hi ha TTY, continuar sense ell
     pass
 
+# Third party
+import cv2
 import speech_recognition as sr
-
 from picarx import Picarx
 from robot_hat import Music, Pin
+from vilib import Vilib
 
-import time
-import threading
-import random
-import tempfile
+# Local
+import keys  # pyright: ignore[reportMissingImports]
+from keys import ASSISTANT_NAME, OPENAI_API_KEY, OPENAI_MODEL
+from openai_helper import OpenAiHelper
+from preset_actions import actions_dict, sounds_dict
+from utils import cancel_redirect_error, gray_print, redirect_error_2_null, sox_volume, speak_block
+from visual_tracking import create_visual_tracking_handler
 
-import os
-import sys
+# PipeWire a Bookworm emula PulseAudio - necessary per a que raspberry pi 4 to work with sound
+os.environ['SDL_AUDIODRIVER'] = 'pulse'
+
+LANGUAGE = 'ca'  # Catalan language code for STT
+# select tts voice role, counld be "alloy, echo, fable, onyx, nova, and shimmer"
+# https://platform.openai.com/docs/guides/text-to-speech/supported-languages
+TTS_VOICE = 'echo'
+SOUND_EFFECT_ACTIONS = ["honking", "start engine", "sardana"]
+VOICE_INSTRUCTIONS = ""
+DEFAULT_HEAD_PAN = 0
+DEFAULT_HEAD_TILT = 20
+VOLUME_DB = 3
+LED_DOUBLE_BLINK_INTERVAL = 0.8 # seconds
+LED_BLINK_INTERVAL = 0.1 # seconds
+
+input_mode = 'voice'
+with_img = True
+led = Pin('LED')
+
 
 # Forcem que os.getlogin retorni l'usuari correcte sense buscar un terminal
 try:
@@ -40,14 +57,13 @@ except (ImportError, OSError):
         return os.getenv('USER', os.getenv('USERNAME', 'user'))
     os.getlogin = mocked_getlogin
 
-os.environ['SDL_AUDIODRIVER'] = 'pulse' # PipeWire a Bookworm emula PulseAudio - necessary per a que raspberry pi 4 to work with sound
-
 # Enable robot_hat speaker switch
 try:
     proc = os.popen("pinctrl set 20 op dh")
     proc.close()  # Tancar el procés per evitar resource leaks
 except Exception as e:
     print(f'Warning: Could not enable speaker switch: {e}')
+    
 current_path = os.path.dirname(os.path.abspath(__file__))
 os.chdir(current_path) # change working directory
 
@@ -55,53 +71,18 @@ os.chdir(current_path) # change working directory
 tts_dir = os.path.join(current_path, 'tts')
 os.makedirs(tts_dir, mode=0o755, exist_ok=True)
 
-input_mode = None
-with_img = True
-args = sys.argv[1:]
-
-# Comprovar si hi ha TTY disponible
-has_tty = sys.stdin.isatty() if hasattr(sys.stdin, 'isatty') else False
-
-if '--keyboard' in args:
-    if has_tty:
-        input_mode = 'keyboard'
-    else:
-        print('Warning: --keyboard especificat però no hi ha TTY disponible. Usant mode voice.')
-        input_mode = 'voice'
-else:
-    input_mode = 'voice'
-
-if '--no-img' in args:
-    with_img = False
-else:
-    with_img = True
-
 # openai init (Responses API)
 # =================================================================
-_openai_model_or_prompt = _OPENAI_PROMPT_ID or _OPENAI_MODEL or OPENAI_ASSISTANT_ID
-_instructions_path = os.path.join(current_path, 'assistents', 'arnau.txt')
 openai_helper = OpenAiHelper(
-    OPENAI_API_KEY, _openai_model_or_prompt, 'picarx',
-    instructions_path=_instructions_path
+    api_key=OPENAI_API_KEY,
+    model_or_prompt_id=OPENAI_MODEL,
+    assistant_name=ASSISTANT_NAME
 )
-
-LANGUAGE = 'ca'  # Catalan language code for STT
-VOLUME_DB = 3
 
 # Validar VOLUME_DB dins d'un rang raonable (0-10 per evitar distorsió)
 if not isinstance(VOLUME_DB, (int, float)) or VOLUME_DB < 0 or VOLUME_DB > 10:
     print(f'Warning: VOLUME_DB={VOLUME_DB} està fora del rang recomanat (0-10). Usant valor per defecte 3.')
     VOLUME_DB = 3
-
-# select tts voice role, counld be "alloy, echo, fable, onyx, nova, and shimmer"
-# https://platform.openai.com/docs/guides/text-to-speech/supported-languages
-TTS_VOICE = 'echo'
-
-# voice instructions for vibe
-# https://www.openai.fm/
-VOICE_INSTRUCTIONS = ""
-
-SOUND_EFFECT_ACTIONS = ["honking", "start engine", "sardana"]
 
 # car init 
 try:
@@ -113,28 +94,20 @@ except Exception as e:
 
 music = Music()
 
-led = Pin('LED')
-
-DEFAULT_HEAD_PAN = 0
-DEFAULT_HEAD_TILT = 20
-
 # Vilib start
-if with_img:
-    from vilib import Vilib
-    import cv2
-    os.environ['FLASK_CHDIR'] = current_path
-    Vilib.camera_start(vflip=False,hflip=False)
-    Vilib.show_fps()
-    Vilib.display(local=False,web=True)
-    Vilib.face_detect_switch(True)  # Activar detecció de persones
+os.environ['FLASK_CHDIR'] = current_path
+Vilib.camera_start(vflip=False,hflip=False)
+Vilib.show_fps()
+Vilib.display(local=False,web=True)
+Vilib.face_detect_switch(True)  # Activar detecció de persones
 
-    while True:
-        if Vilib.flask_start:
-            break
-        time.sleep(0.01)
+while True:
+    if Vilib.flask_start:
+        break
+    time.sleep(0.01)
 
-    time.sleep(.5)
-    print('\n')
+time.sleep(.5)
+print('\n')
 
 # speech_recognition init
 recognizer = sr.Recognizer()
@@ -145,7 +118,7 @@ recognizer.dynamic_energy_ratio = 1.6
 speech_loaded = False
 speech_lock = threading.Lock()
 tts_file = None
-# Ref compartida per sincronitzar speak_handler amb wait_for_speech_completion (el bucle principal escriu als refs, el speak_handler llegeix les globals i actualitza el ref quan acaba)
+# Ref compartida per sincronitzar speak_handler amb wait_for_speech_completion
 _speech_loaded_ref = None
 
 def speak_hanlder():
@@ -166,15 +139,11 @@ def speak_hanlder():
 speak_thread = threading.Thread(target=speak_hanlder)
 speak_thread.daemon = True
 
-
 # actions thread
 action_status = 'standby' # 'standby', 'think', 'actions', 'actions_done'
 led_status = 'standby' # 'standby', 'think' or 'actions', 'actions_done'
 last_action_status = 'standby'
 last_led_status = 'standby'
-
-LED_DOUBLE_BLINK_INTERVAL = 0.8 # seconds
-LED_BLINK_INTERVAL = 0.1 # seconds
 
 actions_to_be_done = []
 action_lock = threading.Lock()
@@ -419,38 +388,6 @@ def get_voice_input(recognizer_obj, openai_helper_obj, language, action_lock_ref
     if not _result or _result == "":
         return None
     return _result
-
-
-def get_keyboard_input(action_lock_ref, action_status_ref, car, with_img_flag):
-    """
-    Obté input de teclat.
-    
-    Returns:
-        tuple: (text_input, should_continue, input_mode_changed)
-        - text_input: Text introduït, o None si està buit
-        - should_continue: Si cal continuar el bucle
-        - input_mode_changed: Si s'ha canviat el mode d'input
-    """
-    # No resetar càmera si el seguiment visual està actiu
-    # El seguiment visual controla els angles de la càmera contínuament
-    reset_camera_if_needed(car, with_img_flag)
-
-    with action_lock_ref:
-        action_status_ref['action_status'] = 'standby'
-
-    try:
-        _result = input(f'\033[1;30m{"input: "}\033[0m').encode(sys.stdin.encoding).decode('utf-8')
-    except (EOFError, OSError) as e:
-        # Si no hi ha TTY disponible, canviar a mode voice
-        print(f'Error: No TTY disponible per input de teclat: {e}')
-        print('Canviant a mode voice...')
-        return (None, True, True)
-
-    if not _result or _result == "":
-        return (None, True, False)
-    
-    return (_result, False, False)
-
 
 def get_user_input(input_mode_val, recognizer_obj, openai_helper_obj, language, 
                    action_lock_ref, action_status_ref, car, with_img_flag):
@@ -812,7 +749,7 @@ def main():
             'dir_path': tts_dir,
             'voice': TTS_VOICE,
             'volume_db': VOLUME_DB,
-            'instructions': VOICE_INSTRUCTIONS
+            'instructions': ""
         }
         
         process_user_query(user_input, config, action_state, speech_state, tts_config)

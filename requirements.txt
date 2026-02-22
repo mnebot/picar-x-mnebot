@@ -1,0 +1,12 @@
+# Dependències principals (per desenvolupament local i tests)
+openai>=1.0.0
+SpeechRecognition>=3.10.0
+opencv-python>=4.8.0
+
+# Tests
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# NOTA: robot_hat, vilib, sunfounder_controller, picarx són del Picar-X
+# i s'instal·len al Raspberry Pi segons la documentació de SunFounder.
+# No calen per executar tests ni per desenvolupar en local.
