@@ -18,9 +18,12 @@ class OpenAiHelper():
     TTS_OUTPUT_FILE = 'tts_output.mp3'
     TIMEOUT = 30  # seconds
 
-    def __init__(self, api_key, timeout=TIMEOUT):
+    def __init__(self, api_key, assistant_id=None, timeout=None):
+        if timeout is None:
+            timeout = self.TIMEOUT
         self.api_key = api_key
-        self.client = OpenAI(api_key=api_key, timeout=timeout)
+        self.assistant_id = assistant_id
+        self.client = OpenAI(api_key=api_key, assistant_id=assistant_id, timeout=timeout)
         self._last_response_id = None
 
     def stt(self, audio, language='en'):
