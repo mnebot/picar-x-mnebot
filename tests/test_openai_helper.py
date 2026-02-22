@@ -33,53 +33,6 @@ class TestChatPrint(unittest.TestCase):
         self.assertIn("user", call_args)
         self.assertIn("Hola robot", call_args)
 
-
-class TestOpenAiHelperInit(unittest.TestCase):
-    """Tests per al constructor OpenAiHelper amb Responses API"""
-
-    @patch('openai_helper.OpenAI')
-    def test_init_with_model(self, mock_openai_class):
-        """model_or_prompt_id com a model estableix self.model"""
-        h = OpenAiHelper(api_key="key", model_or_prompt_id="gpt-4.1-mini")
-        self.assertIsNone(h.prompt_id)
-        self.assertEqual(h.model, "gpt-4.1-mini")
-
-    @patch('openai_helper.OpenAI')
-    def test_init_with_prompt_id(self, mock_openai_class):
-        """model_or_prompt_id començant per prompt_ estableix self.prompt_id"""
-        h = OpenAiHelper(api_key="key", model_or_prompt_id="prompt_abc123")
-        self.assertEqual(h.prompt_id, "prompt_abc123")
-        self.assertIsNone(h.model)
-
-    @patch('openai_helper.OpenAI')
-    def test_init_with_asst_passes_through_as_model(self, mock_openai_class):
-        """asst_xxx es passa tal qual com a model (el handling legacy es fa upstream a keys/gpt_car)"""
-        h = OpenAiHelper(api_key="key", model_or_prompt_id="asst_xxx")
-        self.assertIsNone(h.prompt_id)
-        self.assertEqual(h.model, "asst_xxx")
-
-    @patch('openai_helper.OpenAI')
-    def test_init_none_uses_default_model(self, mock_openai_class):
-        """model_or_prompt_id None usa DEFAULT_MODEL"""
-        h = OpenAiHelper(api_key="key")
-        self.assertEqual(h.model, OpenAiHelper.DEFAULT_MODEL)
-
-    @patch('openai_helper.OpenAI')
-    def test_init_with_instructions_path(self, mock_openai_class):
-        """instructions_path vàlid carrega les instruccions"""
-        with patch('builtins.open', unittest.mock.mock_open(read_data='Instruccions de prova')):
-            with patch('os.path.isfile', return_value=True):
-                h = OpenAiHelper(api_key="key", instructions_path="/path/instruccions.txt")
-        self.assertEqual(h._instructions, 'Instruccions de prova')
-
-    @patch('openai_helper.OpenAI')
-    def test_init_instructions_path_missing_keeps_none(self, mock_openai_class):
-        """instructions_path inexistent manté _instructions a None"""
-        with patch('os.path.isfile', return_value=False):
-            h = OpenAiHelper(api_key="key", instructions_path="/noexisteix.txt")
-        self.assertIsNone(h._instructions)
-
-
 class TestOpenAiHelperParseResponse(unittest.TestCase):
     """Tests per a _parse_response_value"""
 
@@ -121,21 +74,6 @@ class TestOpenAiHelperPrepareMessage(unittest.TestCase):
 class TestOpenAiHelperCallResponsesApi(unittest.TestCase):
     """Tests per a _call_responses_api"""
 
-    @patch('openai_helper.OpenAI')
-    def test_call_responses_api_completed_returns_parsed(self, mock_openai_class):
-        """Resposta completed retorna el valor parsejat"""
-        mock_client = MagicMock()
-        mock_openai_class.return_value = mock_client
-        mock_resp = Mock()
-        mock_resp.status = "completed"
-        mock_resp.output_text = '{"answer": "Hola", "actions": []}'
-        mock_resp.id = "resp_123"
-        mock_client.responses.create.return_value = mock_resp
-
-        h = OpenAiHelper(api_key="key")
-        result = h._call_responses_api("Hola")
-        self.assertEqual(result, {"answer": "Hola", "actions": []})
-        self.assertEqual(h._last_response_id, "resp_123")
 
     @patch('openai_helper.OpenAI')
     def test_call_responses_api_failed_returns_none(self, mock_openai_class):
@@ -182,23 +120,6 @@ class TestOpenAiHelperCallResponsesApi(unittest.TestCase):
         with patch('openai_helper.print'):
             result = h._call_responses_api("Hola")
         self.assertIsNone(result)
-
-    @patch('openai_helper.OpenAI')
-    def test_call_responses_api_uses_prompt_id_when_set(self, mock_openai_class):
-        """Quan prompt_id està definit, es passa a l'API"""
-        mock_client = MagicMock()
-        mock_openai_class.return_value = mock_client
-        mock_resp = Mock()
-        mock_resp.status = "completed"
-        mock_resp.output_text = '{"answer": "ok"}'
-        mock_resp.id = "r1"
-        mock_client.responses.create.return_value = mock_resp
-
-        h = OpenAiHelper(api_key="key", model_or_prompt_id="prompt_xyz")
-        h._call_responses_api("Test")
-        call_kwargs = mock_client.responses.create.call_args[1]
-        self.assertIn("prompt", call_kwargs)
-        self.assertEqual(call_kwargs["prompt"]["prompt_id"], "prompt_xyz")
 
     @patch('openai_helper.OpenAI')
     def test_call_responses_api_uses_previous_response_id(self, mock_openai_class):

@@ -19,7 +19,7 @@ from vilib import Vilib
 
 # Local
 import keys  # pyright: ignore[reportMissingImports]
-from keys import ASSISTANT_NAME, OPENAI_API_KEY, OPENAI_MODEL
+from keys import OPENAI_API_KEY
 from openai_helper import OpenAiHelper
 from preset_actions import actions_dict, sounds_dict
 from utils import cancel_redirect_error, gray_print, redirect_error_2_null, sox_volume, speak_block
@@ -73,12 +73,8 @@ os.makedirs(tts_dir, mode=0o755, exist_ok=True)
 
 # openai init (Responses API)
 # =================================================================
-instructions_path = os.path.join(current_path, 'assistents', 'arnau.txt')
 openai_helper = OpenAiHelper(
-    api_key=OPENAI_API_KEY,
-    model_or_prompt_id=OPENAI_MODEL,
-    assistant_name=ASSISTANT_NAME,
-    instructions_path=instructions_path
+    api_key=OPENAI_API_KEY,timeout=OpenAiHelper.TIMEOUT
 )
 
 # Validar VOLUME_DB dins d'un rang raonable (0-10 per evitar distorsió)

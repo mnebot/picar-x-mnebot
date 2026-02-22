@@ -17,30 +17,11 @@ class OpenAiHelper():
     STT_OUT = "stt_output.wav"
     TTS_OUTPUT_FILE = 'tts_output.mp3'
     TIMEOUT = 30  # seconds
-    DEFAULT_MODEL = "gpt-4.1-mini"
 
-    def __init__(self, api_key, model_or_prompt_id=None, assistant_name='assistant',
-                 instructions_path=None, timeout=TIMEOUT):
-        """
-        model_or_prompt_id: model (e.g. "gpt-4.1-mini") o prompt_id (començant per "prompt_")
-                           Si és "asst_xxx" (legacy), s'ignora i s'usa DEFAULT_MODEL.
-        """
+    def __init__(self, api_key, timeout=TIMEOUT):
         self.api_key = api_key
         self.client = OpenAI(api_key=api_key, timeout=timeout)
         self._last_response_id = None
-        self._instructions = None
-        self.assistant_name = assistant_name
-
-        if model_or_prompt_id and str(model_or_prompt_id).startswith("prompt_"):
-            self.prompt_id = model_or_prompt_id
-            self.model = None
-        else:
-            self.prompt_id = None
-            self.model = model_or_prompt_id or self.DEFAULT_MODEL
-
-        if instructions_path and os.path.isfile(instructions_path):
-            with open(instructions_path, 'r', encoding='utf-8') as f:
-                self._instructions = f.read()
 
     def stt(self, audio, language='en'):
         try:
@@ -81,14 +62,6 @@ class OpenAiHelper():
             "input": input_items,
             "store": True,
         }
-        if self.prompt_id:
-            kwargs["prompt"] = {"prompt_id": self.prompt_id}
-        else:
-            kwargs["model"] = self.model
-            if self._instructions:
-                kwargs["instructions"] = self._instructions
-            else:
-                kwargs["instructions"] = "Respon en català. Format JSON: {\"actions\": [...], \"answer\": \"...\"}"
         if self._last_response_id:
             kwargs["previous_response_id"] = self._last_response_id
 
@@ -110,7 +83,7 @@ class OpenAiHelper():
         self._last_response_id = response.id
         text = getattr(response, 'output_text', None) or ""
         if text:
-            chat_print(self.assistant_name, text)
+            chat_print("response", text)
             return self._parse_response_value(text)
         return None
 
