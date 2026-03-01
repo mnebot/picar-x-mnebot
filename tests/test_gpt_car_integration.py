@@ -214,8 +214,8 @@ class TestGptCarHandlersReal(unittest.TestCase):
     @patch('gpt_car.time.localtime')
     @patch('gpt_car.openai_helper')
     @patch('gpt_car.sox_volume')
-    @patch('gpt_car.gray_print')
-    def test_person_detection_handler_real_logic(self, mock_gray_print, mock_sox_volume,
+    @patch('gpt_car.logger')
+    def test_person_detection_handler_real_logic(self, mock_logger, mock_sox_volume,
                                                    mock_openai_helper, mock_localtime,
                                                    mock_strftime, mock_time, mock_sleep):
         """Test de la lògica real del person_detection_handler"""

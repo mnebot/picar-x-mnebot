@@ -5,8 +5,11 @@ detecció de persona centrada (FASE 1), moviment reactiu quan surt del camp de
 visió (FASE 2.1) i estratègia de recerca (FASE 2.2).
 """
 
-import time
+import logging
 import threading
+import time
+
+logger = logging.getLogger(__name__)
 
 
 # Constants de configuració
@@ -252,7 +255,7 @@ def girar_robot_cap_direccio(car, direccio, graus=None):
         car.set_dir_servo_angle(0)
         return True
     except (AttributeError, Exception) as e:
-        print(f'[Visual Tracking] Error en gir reactiu: {e}')
+        logger.error("Error en gir reactiu: %s", e)
         try:
             car.stop()
             if hasattr(car, 'set_dir_servo_angle'):
@@ -282,7 +285,7 @@ def aplicar_angles_camera(car, pan_angle, tilt_angle):
         return True
     except (AttributeError, Exception) as e:
         # Si hi ha un error amb la càmera, registrar però continuar
-        print(f'[Visual Tracking] Error actualitzant angles de càmera: {e}')
+        logger.error("Error actualitzant angles de càmera: %s", e)
         return False
 
 
@@ -547,7 +550,7 @@ def create_visual_tracking_handler(car, vilib, with_img, default_head_tilt):
                 time.sleep(TRACKING_LOOP_DELAY)
                 
             except Exception as e:
-                print(f'[Visual Tracking] Error: {e}')
+                logger.error("Error: %s", e)
                 time.sleep(ERROR_RETRY_DELAY)
     
     def is_person_centered():

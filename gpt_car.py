@@ -20,9 +20,18 @@ from vilib import Vilib
 # Local
 import keys  # pyright: ignore[reportMissingImports]
 from keys import OPENAI_API_KEY, OPENAI_PROMPT_ID
+from logging_config import setup_logging
+from metrics import (
+    record_action_executed,
+    record_chat_duration,
+    record_error,
+    record_stt_duration,
+    record_tts_duration,
+    start_metrics_server,
+)
 from openai_helper import OpenAiHelper
 from preset_actions import actions_dict, sounds_dict
-from utils import cancel_redirect_error, gray_print, redirect_error_2_null, sox_volume, speak_block
+from utils import cancel_redirect_error, redirect_error_2_null, sox_volume, speak_block
 from visual_tracking import create_visual_tracking_handler
 
 # PipeWire a Bookworm emula PulseAudio - necessary per a que raspberry pi 4 to work with sound
@@ -57,15 +66,17 @@ except (ImportError, OSError):
         return os.getenv('USER', os.getenv('USERNAME', 'user'))
     os.getlogin = mocked_getlogin
 
+current_path = os.path.dirname(os.path.abspath(__file__))
+os.chdir(current_path)  # change working directory
+
+logger = setup_logging()
+
 # Enable robot_hat speaker switch
 try:
     proc = os.popen("pinctrl set 20 op dh")
     proc.close()  # Tancar el procés per evitar resource leaks
 except Exception as e:
-    print(f'Warning: Could not enable speaker switch: {e}')
-
-current_path = os.path.dirname(os.path.abspath(__file__))
-os.chdir(current_path) # change working directory
+    logger.warning("Could not enable speaker switch: %s", e)
 
 # Ensure required directories exist with proper permissions
 tts_dir = os.path.join(current_path, 'tts')
@@ -81,7 +92,9 @@ openai_helper = OpenAiHelper(
 
 # Validar VOLUME_DB dins d'un rang raonable (0-10 per evitar distorsió)
 if not isinstance(VOLUME_DB, (int, float)) or VOLUME_DB < 0 or VOLUME_DB > 10:
-    print(f'Warning: VOLUME_DB={VOLUME_DB} està fora del rang recomanat (0-10). Usant valor per defecte 3.')
+    logger.warning(
+        "VOLUME_DB=%s està fora del rang recomanat (0-10). Usant valor per defecte 3.", VOLUME_DB
+    )
     VOLUME_DB = 3
 
 # car init 
@@ -107,7 +120,7 @@ while True:
     time.sleep(0.01)
 
 time.sleep(.5)
-print('\n')
+logger.debug("Ready")
 
 # speech_recognition init
 recognizer = sr.Recognizer()
@@ -265,11 +278,14 @@ def execute_actions_list(actions_list, car, action_lock_ref, action_status_ref):
         try:
             if _action in actions_dict:
                 actions_dict[_action](car)
+                record_action_executed(_action)
             else:
                 available = list(actions_dict.keys())
-                print(f'[debug] unknown action: {_action!r}; available: {available}')
+                logger.debug("unknown action: %r; available: %s", _action, available)
+                record_error("gpt_car")
         except Exception as e:
-            print(f'action error: {e}')
+            logger.error("action error: %s", e)
+            record_error("gpt_car")
         time.sleep(0.5)
     
     with action_lock_ref:
@@ -367,7 +383,7 @@ def get_voice_input(recognizer_obj, openai_helper_obj, language, action_lock_ref
     reset_camera_if_needed(car, with_img_flag)
 
     # listen
-    gray_print("listening ...")
+    logger.info("listening ...")
 
     with action_lock_ref:
         action_status_ref['action_status'] = 'standby'
@@ -380,10 +396,12 @@ def get_voice_input(recognizer_obj, openai_helper_obj, language, action_lock_ref
         audio = recognizer_obj.listen(source)
 
     # stt
-    gray_print('stt ...')
+    logger.info("stt ...")
     st = time.time()
     _result = openai_helper_obj.stt(audio, language=language)
-    gray_print(f"stt takes: {time.time() - st:.3f} s")
+    stt_dur = time.time() - st
+    logger.info("stt takes: %.3f s", stt_dur)
+    record_stt_duration(stt_dur)
 
     if not _result or _result == "":
         return None
@@ -425,7 +443,7 @@ def capture_image(current_path_val, vilib_module=None):
         cv2.imwrite(img_path, vilib_module.img)
         return img_path
     except Exception as e:
-        print(f'Warning: Could not write image file: {e}')
+        logger.warning("Could not write image file: %s", e)
         # Try alternative location
         try:
             img_path = os.path.join(tempfile.gettempdir(), 'img_input.jpg')
@@ -433,10 +451,10 @@ def capture_image(current_path_val, vilib_module=None):
                 cv2.imwrite(img_path, vilib_module.img)
                 return img_path
             else:
-                print('Warning: Vilib.img no disponible, continuant sense imatge')
+                logger.warning("Vilib.img no disponible, continuant sense imatge")
                 return None
         except Exception as e2:
-            print(f'Warning: Could not write image to temp directory: {e2}')
+            logger.warning("Could not write image to temp directory: %s", e2)
             return None
 
 
@@ -448,7 +466,7 @@ def get_gpt_response(user_input, openai_helper_obj, with_img_flag, vilib_module=
     Returns:
         dict: Resposta de GPT
     """
-    gray_print('thinking ...')
+    logger.info("thinking ...")
     st = time.time()
 
     if with_img_flag:
@@ -459,12 +477,14 @@ def get_gpt_response(user_input, openai_helper_obj, with_img_flag, vilib_module=
             response = openai_helper_obj.dialogue_with_img(user_input, img_path)
         else:
             # Fallback a diàleg sense imatge si no es pot obtenir la imatge
-            print('Warning: Continuant sense imatge degut a errors previs')
+            logger.warning("Continuant sense imatge degut a errors previs")
             response = openai_helper_obj.dialogue(user_input)
     else:
         response = openai_helper_obj.dialogue(user_input)
 
-    gray_print(f'chat takes: {time.time() - st:.3f} s')
+    chat_dur = time.time() - st
+    logger.info("chat takes: %.3f s", chat_dur)
+    record_chat_duration(chat_dur)
     return response
 
 
@@ -531,7 +551,8 @@ def parse_gpt_response(response, sound_effect_actions):
         else:
             return _parse_string_response(response)
     except Exception as e:
-        print(f'Warning: Error processant resposta de GPT: {e}')
+        logger.warning("Error processant resposta de GPT: %s", e)
+        record_error("gpt_car")
         return [], '', []
 
 
@@ -555,7 +576,9 @@ def generate_tts(answer, openai_helper_obj, tts_dir_path, tts_voice, volume_db,
     if _tts_status:
         tts_file_ref['tts_file'] = os.path.join(tts_dir_path, f"{_time}_{volume_db}dB.wav")
         _tts_status = sox_volume(_tts_f, tts_file_ref['tts_file'], volume_db)
-    gray_print(f'tts takes: {time.time() - st:.3f} s')
+    tts_dur = time.time() - st
+    logger.info("tts takes: %.3f s", tts_dur)
+    record_tts_duration(tts_dur)
     return _tts_status
 
 
@@ -567,15 +590,17 @@ def execute_actions_and_sounds(actions_list, sound_actions_list, music_obj,
     # ---- actions ----
     with action_lock_ref:
         actions_to_be_done_ref['actions_to_be_done'] = actions_list
-        gray_print(f'actions: {actions_list}')
+        logger.info("actions: %s", actions_list)
         action_status_ref['action_status'] = 'actions'
 
     # --- sound effects and voice ---
     for _sound in sound_actions_list:
         try:
             sounds_dict[_sound](music_obj)
+            record_action_executed(_sound)
         except Exception as e:
-            print(f'action error: {e}')
+            logger.error("action error: %s", e)
+            record_error("gpt_car")
 
 
 def wait_for_speech_completion(speech_lock_ref, speech_loaded_ref):
@@ -671,17 +696,15 @@ def process_user_query(user_input, config, action_state, speech_state, tts_confi
         # ---- wait speak done ----
         if tts_status:
             wait_for_speech_completion(speech_state['lock'], speech_state['loaded_ref'])
-            gray_print("[debug] process: speech done, continuing")
+            logger.debug("process: speech done, continuing")
 
         # ---- wait actions done ----
         wait_for_actions_completion(action_state['lock'], action_state['status_ref'])
-        gray_print("[debug] process: actions done, continuing")
-
-        ##
-        print() # new line
+        logger.debug("process: actions done, continuing")
 
     except Exception as e:
-        print(f'actions or TTS error: {e}')
+        logger.error("actions or TTS error: %s", e)
+        record_error("gpt_car")
 
 
 # main
@@ -763,7 +786,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        print(f"\033[31mERROR: {e}\033[m")
+        logger.exception("ERROR: %s", e)
     finally:
         if with_img:
             Vilib.camera_close()

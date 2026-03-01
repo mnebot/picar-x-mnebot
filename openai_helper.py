@@ -1,15 +1,19 @@
 """
 OpenAI API helper - Responses API (replaces deprecated Assistants API).
 """
-from openai import OpenAI
-import time
-import os
 import json
+import logging
+import os
+import time
 
-# utils
-# =================================================================
+from openai import OpenAI
+
+logger = logging.getLogger(__name__)
+
+
 def chat_print(label, message):
-    print(f'{time.time():.3f} {label:>6} >>> {message}')
+    """Registra missatge de diàleg (usuari o resposta) al log."""
+    logger.info("%s >>> %s", label, message)
 
 # OpenAiHelper - Responses API
 # =================================================================
@@ -40,7 +44,7 @@ class OpenAiHelper():
             )
             return transcript.text
         except Exception as e:
-            print(f"stt err:{e}")
+            logger.error("stt err: %s", e)
             return False
 
     def speech_recognition_stt(self, recognizer, audio):
@@ -48,7 +52,7 @@ class OpenAiHelper():
         try:
             return recognizer.recognize_whisper_api(audio, api_key=self.api_key)
         except sr.RequestError as e:
-            print(f"Could not request results from Whisper API; {e}")
+            logger.error("Could not request results from Whisper API: %s", e)
             return False
 
     def _prepare_message_with_language(self, msg):
@@ -77,12 +81,12 @@ class OpenAiHelper():
             return None
 
         if response.status != "completed":
-            print(f"Response status: {response.status}")
+            logger.warning("Response status: %s", response.status)
             if hasattr(response, 'last_error') and response.last_error is not None:
                 err = response.last_error
                 code = getattr(err, 'code', '?')
                 msg = getattr(err, 'message', str(err))
-                print(f"Response last_error: code={code}, message={msg}")
+                logger.warning("Response last_error: code=%s, message=%s", code, msg)
             return None
 
         self._last_response_id = response.id
@@ -132,5 +136,5 @@ class OpenAiHelper():
                 response.stream_to_file(output_file)
             return True
         except Exception as e:
-            print(f'tts err: {e}')
+            logger.error("tts err: %s", e)
             return False

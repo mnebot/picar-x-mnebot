@@ -24,14 +24,14 @@ from openai_helper import OpenAiHelper, chat_print
 class TestChatPrint(unittest.TestCase):
     """Tests per a la funció chat_print"""
 
-    @patch('builtins.print')
-    def test_chat_print_formats_message(self, mock_print):
-        """Test que chat_print imprimeix amb format label i missatge"""
-        chat_print("user", "Hola robot")
-        mock_print.assert_called_once()
-        call_args = str(mock_print.call_args)
-        self.assertIn("user", call_args)
-        self.assertIn("Hola robot", call_args)
+    def test_chat_print_formats_message(self):
+        """Test que chat_print registra amb format label i missatge"""
+        import logging
+        with self.assertLogs('openai_helper', level=logging.INFO) as cm:
+            chat_print("user", "Hola robot")
+        self.assertEqual(len(cm.records), 1)
+        self.assertIn("user", cm.records[0].message)
+        self.assertIn("Hola robot", cm.records[0].message)
 
 class TestOpenAiHelperParseResponse(unittest.TestCase):
     """Tests per a _parse_response_value"""
@@ -86,7 +86,7 @@ class TestOpenAiHelperCallResponsesApi(unittest.TestCase):
         mock_client.responses.create.return_value = mock_resp
 
         h = OpenAiHelper(api_key="key")
-        with patch('openai_helper.print'):
+        with patch('openai_helper.logger'):
             result = h._call_responses_api("Hola")
         self.assertIsNone(result)
 
@@ -104,10 +104,11 @@ class TestOpenAiHelperCallResponsesApi(unittest.TestCase):
         mock_client.responses.create.return_value = mock_resp
 
         h = OpenAiHelper(api_key="key")
-        with patch('openai_helper.print') as mock_print:
+        import logging
+        with self.assertLogs('openai_helper', level=logging.WARNING) as cm:
             h._call_responses_api("Hola")
-        # Hauria d'haver cridat print per status i last_error
-        self.assertGreaterEqual(mock_print.call_count, 2)
+        # Hauria d'haver registrat status i last_error
+        self.assertGreaterEqual(len(cm.records), 2)
 
     @patch('openai_helper.OpenAI')
     def test_call_responses_api_exception_returns_none(self, mock_openai_class):
@@ -117,7 +118,7 @@ class TestOpenAiHelperCallResponsesApi(unittest.TestCase):
         mock_client.responses.create.side_effect = Exception("API error")
 
         h = OpenAiHelper(api_key="key")
-        with patch('openai_helper.print'):
+        with patch('openai_helper.logger'):
             result = h._call_responses_api("Hola")
         self.assertIsNone(result)
 
@@ -218,7 +219,7 @@ class TestOpenAiHelperTTS(unittest.TestCase):
         h = OpenAiHelper(api_key="key")
         with patch('os.path.exists', return_value=True):
             with patch('os.path.isdir', return_value=True):
-                with patch('openai_helper.print'):
+                with patch('openai_helper.logger'):
                     result = h.text_to_speech("Hola", "/out/speech.mp3")
         self.assertFalse(result)
 

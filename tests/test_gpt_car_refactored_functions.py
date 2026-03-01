@@ -511,12 +511,12 @@ class TestGetVoiceInput(unittest.TestCase):
     """Tests per a get_voice_input()"""
     
     @patch('gpt_car.reset_camera_if_needed')
-    @patch('gpt_car.gray_print')
+    @patch('gpt_car.logger')
     @patch('gpt_car.redirect_error_2_null')
     @patch('gpt_car.cancel_redirect_error')
     @patch('gpt_car.sr.Microphone')
     def test_get_voice_input_success(self, mock_mic, mock_cancel, mock_redirect, 
-                                     mock_gray, mock_reset):
+                                     mock_logger, mock_reset):
         """Test obtenir input de veu exitós"""
         mock_recognizer = Mock()
         mock_openai_helper = Mock()
@@ -539,12 +539,12 @@ class TestGetVoiceInput(unittest.TestCase):
         mock_openai_helper.stt.assert_called_once()
     
     @patch('gpt_car.reset_camera_if_needed')
-    @patch('gpt_car.gray_print')
+    @patch('gpt_car.logger')
     @patch('gpt_car.redirect_error_2_null')
     @patch('gpt_car.cancel_redirect_error')
     @patch('gpt_car.sr.Microphone')
     def test_get_voice_input_empty(self, mock_mic, mock_cancel, mock_redirect,
-                                   mock_gray, mock_reset):
+                                   mock_logger, mock_reset):
         """Test obtenir input de veu buit"""
         mock_recognizer = Mock()
         mock_openai_helper = Mock()
@@ -589,9 +589,9 @@ class TestGetGptResponse(unittest.TestCase):
     """Tests per a get_gpt_response()"""
     
     @patch('gpt_car.capture_image')
-    @patch('gpt_car.gray_print')
+    @patch('gpt_car.logger')
     @patch('gpt_car.time.time')
-    def test_get_gpt_response_with_img(self, mock_time, mock_gray, mock_capture):
+    def test_get_gpt_response_with_img(self, mock_time, mock_logger, mock_capture):
         """Test obtenir resposta GPT amb imatge"""
         mock_time.side_effect = [100.0, 100.5]  # st, end
         mock_capture.return_value = '/path/to/image.jpg'
@@ -607,9 +607,9 @@ class TestGetGptResponse(unittest.TestCase):
         mock_openai_helper.dialogue_with_img.assert_called_once()
     
     @patch('gpt_car.capture_image')
-    @patch('gpt_car.gray_print')
+    @patch('gpt_car.logger')
     @patch('gpt_car.time.time')
-    def test_get_gpt_response_without_img(self, mock_time, mock_gray, mock_capture):
+    def test_get_gpt_response_without_img(self, mock_time, mock_logger, mock_capture):
         """Test obtenir resposta GPT sense imatge"""
         mock_time.side_effect = [100.0, 100.5]
         mock_openai_helper = Mock()
@@ -640,11 +640,11 @@ class TestGenerateTts(unittest.TestCase):
         self.assertFalse(result)
         mock_openai_helper.text_to_speech.assert_not_called()
     
-    @patch('gpt_car.gray_print')
+    @patch('gpt_car.logger')
     @patch('gpt_car.time.strftime')
     @patch('gpt_car.time.localtime')
     @patch('gpt_car.time.time')
-    def test_generate_tts_failure(self, mock_time, mock_localtime, mock_strftime, mock_gray):
+    def test_generate_tts_failure(self, mock_time, mock_localtime, mock_strftime, mock_logger):
         """Test generació TTS fallida"""
         mock_time.side_effect = [100.0, 100.5]
         mock_strftime.return_value = "24-01-01_12-00-00"
@@ -1007,11 +1007,11 @@ class TestMainFunction(unittest.TestCase):
             'instructions': ''
         }
         
-        # No hauria de llançar excepció, només imprimir error
-        with patch('builtins.print') as mock_print:
+        # No hauria de llançar excepció, només registrar error
+        with patch('gpt_car.logger') as mock_logger:
             gpt_car.process_user_query("Hola", config, action_state, speech_state, tts_config)
-            # Verificar que s'ha imprès l'error
-            mock_print.assert_any_call("actions or TTS error: TTS error")
+            # Verificar que s'ha registrat l'error
+            mock_logger.error.assert_any_call("actions or TTS error: %s", "TTS error")
 
 
 class TestWaitFunctionsEdgeCases(unittest.TestCase):

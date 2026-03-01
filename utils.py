@@ -1,5 +1,8 @@
+import logging
 import os
 import sys
+
+logger = logging.getLogger(__name__)
 
 GRAY = '1;30'
 RED = '0;31'
@@ -15,12 +18,15 @@ def print_color(msg, end='\n', file=sys.stdout, flush=False, color=''):
 
 def gray_print(msg, end='\n', file=sys.stdout, flush=False):
     print_color(msg, end=end, file=file, flush=flush, color=GRAY)
+    logger.debug("%s", msg)
 
 def warn(msg, end='\n', file=sys.stdout, flush=False):
     print_color(msg, end=end, file=file, flush=flush, color=YELLOW)
+    logger.warning("%s", msg)
 
 def error(msg, end='\n', file=sys.stdout, flush=False):
     print_color(msg, end=end, file=file, flush=flush, color=RED)
+    logger.error("%s", msg)
 
 def redirect_error_2_null():
     # https://github.com/spatialaudio/python-sounddevice/issues/11
@@ -63,7 +69,7 @@ def sox_volume(input_file, output_file, volume):
 
         return True
     except Exception as e:
-        print(f"sox_volume err: {e}")
+        logger.error("sox_volume err: %s", e)
         return False
 
 

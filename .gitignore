@@ -16,6 +16,9 @@ keys.py.save*
 # Carpeta de fitxers de veu generats (TTS)
 tts/
 
+# Carpeta de logs de l'aplicació
+logs/
+
 # Fitxers de configuració OpenAI
 keys.py
 
