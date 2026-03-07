@@ -1,0 +1,80 @@
+{"timestamp": "2026-03-01T09:28:47.301750Z", "level": "WARNING", "message": "Could not enable speaker switch: [WinError 6] Controlador no válido", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:28:49.618462Z", "level": "ERROR", "message": "action error: accidental", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:28:49.656316Z", "level": "WARNING", "message": "Error processant resposta de GPT: Error converting to string", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:28:52.922091Z", "level": "INFO", "message": "user >>> Hola robot", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:28:53.029042Z", "level": "WARNING", "message": "Response status: failed", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:28:53.031805Z", "level": "WARNING", "message": "Response last_error: code=server_error, message=Something went wrong", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:28:53.048124Z", "level": "WARNING", "message": "Response status: failed", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:28:53.051009Z", "level": "INFO", "message": "response >>> {\"answer\": \"ok\"}", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:48.205084Z", "level": "WARNING", "message": "Could not enable speaker switch: [WinError 6] Controlador no válido", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:29:49.760597Z", "level": "INFO", "message": "user >>> Hola robot", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:49.870242Z", "level": "WARNING", "message": "Response status: <MagicMock name='mock.OpenAI().responses.create().status' id='1881657102688'>", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:49.872176Z", "level": "WARNING", "message": "Response last_error: code=<MagicMock name='mock.OpenAI().responses.create().last_error.code' id='1881656064864'>, message=<MagicMock name='mock.OpenAI().responses.create().last_error.message' id='1881657099664'>", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:49.877193Z", "level": "WARNING", "message": "Response status: <MagicMock name='mock.OpenAI().responses.create().status' id='1881657102688'>", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:49.877607Z", "level": "WARNING", "message": "Response last_error: code=<MagicMock name='mock.OpenAI().responses.create().last_error.code' id='1881656064864'>, message=<MagicMock name='mock.OpenAI().responses.create().last_error.message' id='1881657099664'>", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:49.891996Z", "level": "WARNING", "message": "Response status: <MagicMock name='mock.OpenAI().responses.create().status' id='1881657102688'>", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:49.892772Z", "level": "WARNING", "message": "Response last_error: code=<MagicMock name='mock.OpenAI().responses.create().last_error.code' id='1881656064864'>, message=<MagicMock name='mock.OpenAI().responses.create().last_error.message' id='1881657099664'>", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:49.895734Z", "level": "WARNING", "message": "Response status: <MagicMock name='mock.OpenAI().responses.create().status' id='1881657102688'>", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:49.896158Z", "level": "WARNING", "message": "Response last_error: code=<MagicMock name='mock.OpenAI().responses.create().last_error.code' id='1881656064864'>, message=<MagicMock name='mock.OpenAI().responses.create().last_error.message' id='1881657099664'>", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:49.909660Z", "level": "INFO", "message": "user >>> Hola", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:49.913990Z", "level": "INFO", "message": "user >>> Què veus?", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:49.915513Z", "level": "WARNING", "message": "Response status: <MagicMock name='mock.OpenAI().responses.create().status' id='1881657102688'>", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:49.915907Z", "level": "WARNING", "message": "Response last_error: code=<MagicMock name='mock.OpenAI().responses.create().last_error.code' id='1881656064864'>, message=<MagicMock name='mock.OpenAI().responses.create().last_error.message' id='1881657099664'>", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:29:50.188379Z", "level": "ERROR", "message": "action error: accidental", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:29:50.221573Z", "level": "WARNING", "message": "Error processant resposta de GPT: Error converting to string", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:08.576826Z", "level": "WARNING", "message": "Could not enable speaker switch: [WinError 6] Controlador no válido", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:10.344493Z", "level": "ERROR", "message": "action error: accidental", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:10.365070Z", "level": "WARNING", "message": "Error processant resposta de GPT: Error converting to string", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:10.385010Z", "level": "INFO", "message": "listening ...", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:10.387297Z", "level": "INFO", "message": "stt ...", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:10.387699Z", "level": "INFO", "message": "stt takes: 0.000 s", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:10.393267Z", "level": "INFO", "message": "listening ...", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:10.393670Z", "level": "INFO", "message": "stt ...", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:10.393821Z", "level": "INFO", "message": "stt takes: 0.000 s", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:10.397578Z", "level": "INFO", "message": "thinking ...", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:10.398192Z", "level": "INFO", "message": "chat takes: 0.500 s", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:10.401945Z", "level": "INFO", "message": "thinking ...", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:10.402260Z", "level": "INFO", "message": "chat takes: 0.500 s", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:10.408820Z", "level": "INFO", "message": "tts takes: 0.500 s", "module": "gpt_car", "logger": "picarx"}
+
+{"timestamp": "2026-03-01T09:31:12.385643Z", "level": "INFO", "message": "response >>> {\"answer\": \"ok\"}", "module": "openai_helper", "logger": "openai_helper"}
+
+{"timestamp": "2026-03-01T09:31:18.123776Z", "level": "ERROR", "message": "Error en gir reactiu: Error motor", "module": "visual_tracking", "logger": "visual_tracking"}
+

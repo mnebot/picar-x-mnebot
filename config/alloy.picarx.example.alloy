@@ -1,0 +1,42 @@
+// Configuració d'exemple per Grafana Alloy: logs i mètriques de l'app Picar-X
+//
+// Afegeix aquests blocs a /etc/alloy/config.alloy (o crea un fitxer separat
+// i inclou'l amb l'opció appropriada d'Alloy).
+//
+// Variables d'entorn que has de crear a la Raspberry Pi:
+//   GCLOUD_RW_API_KEY       - API key de Grafana Cloud (per Prometheus i Loki)
+//   GCLOUD_HOSTED_METRICS_ID - Instance ID de Prometheus a Grafana Cloud
+//   GCLOUD_HOSTED_LOGS_ID    - Instance ID de Loki a Grafana Cloud
+//   PICARX_LOG_PATH         - Ruta al fitxer de logs (ex: /var/log/picarx/app.log).
+//                             Ha de coincidir amb PICARX_LOG_FILE de l'app Python.
+//
+// Les URLs de Grafana Cloud es poden obtenir al teu compte Grafana Cloud.
+
+// --- Logs de l'app Picar-X ---
+local.file_match "picarx_app_logs" {
+  path_targets = [{
+    __address__ = "localhost",
+    __path__    = env("PICARX_LOG_PATH"),
+    instance    = "picarx",
+    job         = "picarx",
+  }]
+}
+
+loki.source.file "picarx_app_logs" {
+  targets    = local.file_match.picarx_app_logs.targets
+  forward_to = [loki.write.grafana_cloud_loki.receiver]
+}
+
+// --- Mètriques de l'app Picar-X (port 9090) ---
+prometheus.scrape "picarx_app" {
+  targets = [{
+    __address__ = "localhost:9090",
+    instance    = "picarx",
+    job         = "picarx",
+  }]
+  forward_to = [prometheus.relabel.picarx_app.receiver]
+}
+
+prometheus.relabel "picarx_app" {
+  forward_to = [prometheus.remote_write.metrics_service.receiver]
+}
