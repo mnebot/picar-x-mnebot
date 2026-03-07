@@ -87,6 +87,8 @@ if not isinstance(VOLUME_DB, (int, float)) or VOLUME_DB < 0 or VOLUME_DB > 10:
 # car init 
 try:
     my_car = Picarx()
+    print(hasattr(my_car, 'ultrasonic'))
+    print(dir(my_car))
     time.sleep(1)
 except Exception as e:
     # Preservar la traça completa de l'excepció original

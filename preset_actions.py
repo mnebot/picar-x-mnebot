@@ -316,10 +316,13 @@ def advance_safe(car):
     Sense esclafar: comprova la distància abans i durant el moviment."""
     car.reset()
     car.set_dir_servo_angle(0)
+    import utils
     ultrasonic = getattr(car, 'ultrasonic', None)
     if ultrasonic is None:
+        utils.warn("[advance_safe] car.ultrasonic no existeix, fallback a advance_20cm")
         advance_20cm(car)
         return
+    utils.warn("[advance_safe] car.ultrasonic existeix, avançant amb detecció d'obstacles")
     # Precomprovació: obstacle massa proper
     try:
         dist = ultrasonic.read()
