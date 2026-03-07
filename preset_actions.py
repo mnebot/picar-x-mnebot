@@ -305,6 +305,47 @@ def advance_20cm(car):
     car.stop()
 
 
+MIN_SAFE_DISTANCE_CM = 22
+STEP_DURATION_S = 0.1
+MAX_DURATION_S = 20  # ~5 m màxim a velocitat 30
+ADVANCE_SPEED = 30
+
+
+def advance_safe(car):
+    """Avança el cotxe endavant fins a 5 m màxim, aturant-se si detecta un obstacle (ultrasònic).
+    Sense esclafar: comprova la distància abans i durant el moviment."""
+    car.reset()
+    car.set_dir_servo_angle(0)
+    ultrasonic = getattr(car, 'ultrasonic', None)
+    if ultrasonic is None:
+        advance_20cm(car)
+        return
+    # Precomprovació: obstacle massa proper
+    try:
+        dist = ultrasonic.read()
+    except Exception:
+        advance_20cm(car)
+        return
+    if dist < MIN_SAFE_DISTANCE_CM:
+        car.stop()
+        return
+    # Bucle de passos: avançar i comprovar distància
+    elapsed = 0.0
+    while elapsed < MAX_DURATION_S:
+        car.forward(ADVANCE_SPEED)
+        sleep(STEP_DURATION_S)
+        elapsed += STEP_DURATION_S
+        try:
+            dist = ultrasonic.read()
+        except Exception:
+            car.stop()
+            return
+        if dist < MIN_SAFE_DISTANCE_CM:
+            car.stop()
+            return
+    car.stop()
+
+
 def donar_la_volta(car):
     """Donar la volta: engeu enrere cap a l'esquerra (rodes a l'esquerra), després avanci cap a la dreta (rodes a la dreta). Adequat per tracció només a les rodes motrius. Durada triplicada per girar ~180°."""
     car.reset()
@@ -350,9 +391,11 @@ actions_dict = {
     "twist body": twist_body,
     "celebrate": celebrate,
     "depressed": depressed,
-    "advance": advance_20cm,
-    "avanci": advance_20cm,
+    "advance": advance_safe,
+    "avanci": advance_safe,
     "forward 20cm": advance_20cm,
+    "advance safe": advance_safe,
+    "avanci segur": advance_safe,
     "donar la volta": donar_la_volta,
     "girar": donar_la_volta,
     "turn around": donar_la_volta,

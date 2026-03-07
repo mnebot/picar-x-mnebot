@@ -28,7 +28,7 @@ from preset_actions import (
     actions_dict, sounds_dict,
     wave_hands, resist, act_cute, rub_hands, think, keep_think,
     shake_head, nod, depressed, twist_body, celebrate,
-    honking, start_engine, advance_20cm, donar_la_volta,
+    honking, start_engine, advance_20cm, advance_safe, donar_la_volta,
     ballar_sardana, sardana,
     seguir_persona, aturar_seguiment,
 )
@@ -102,6 +102,48 @@ class TestPresetActions(unittest.TestCase):
         self.assertIs(sounds_dict["sardana"], sardana)
         sardana(self.mock_music)
         # sense fitxer sounds/sardana.wav no crida sound_play_threading; en test normalment no existeix
+
+    def test_advance_safe_accio_disponible(self):
+        """Test que 'advance safe' i 'avanci segur' estan al diccionari"""
+        self.assertIn("advance safe", actions_dict)
+        self.assertIn("avanci segur", actions_dict)
+        self.assertIs(actions_dict["advance safe"], advance_safe)
+        self.assertIs(actions_dict["avanci segur"], advance_safe)
+
+    @patch('preset_actions.sleep')
+    def test_advance_safe_amb_ultrasonic_avanca_i_atura(self, mock_sleep):
+        """Test que advance_safe amb ultrasònic crida forward i stop"""
+        mock_car = Mock()
+        mock_ultrasonic = Mock()
+        mock_ultrasonic.read.side_effect = [50, 30, 25]  # distàncies segures
+        mock_car.ultrasonic = mock_ultrasonic
+        advance_safe(mock_car)
+        mock_car.reset.assert_called_once()
+        self.assertGreaterEqual(mock_car.forward.call_count, 1)
+        mock_car.stop.assert_called_once()
+
+    @patch('preset_actions.sleep')
+    def test_advance_safe_sense_ultrasonic_fa_fallback_a_advance_20cm(self, mock_sleep):
+        """Test que advance_safe sense ultrasònic fa fallback a advance_20cm"""
+        mock_car = Mock()
+        mock_car.ultrasonic = None  # Simula absència d'ultrasònic
+        advance_safe(mock_car)
+        # reset cridat 2 vegades: advance_safe i advance_20cm
+        self.assertGreaterEqual(mock_car.reset.call_count, 1)
+        mock_car.forward.assert_called_once_with(30)
+        mock_car.stop.assert_called_once()
+
+    @patch('preset_actions.sleep')
+    def test_advance_safe_atura_quan_obstacle_proper(self, mock_sleep):
+        """Test que advance_safe s'atura abans d'hora quan read() retorna distància < 22 cm"""
+        mock_car = Mock()
+        mock_ultrasonic = Mock()
+        mock_ultrasonic.read.side_effect = [50, 15]  # segon read: obstacle
+        mock_car.ultrasonic = mock_ultrasonic
+        advance_safe(mock_car)
+        mock_car.stop.assert_called_once()
+        # Hauria d'haver avançat poques vegades (1-2 passos abans de detectar obstacle)
+        self.assertLessEqual(mock_car.forward.call_count, 3)
 
 
 if __name__ == '__main__':
