@@ -45,6 +45,48 @@ pip install -r requirements.txt
 
 ## Configuració
 
+### Logs i mètriques (Grafana Cloud)
+
+L'aplicació suporta enviament de logs i mètriques a Grafana Cloud mitjançant Grafana Alloy. Configura les següents variables d'entorn a la Raspberry Pi:
+
+| Variable | Descripció | Per defecte |
+|----------|------------|-------------|
+| `PICARX_LOG_FILE` | Ruta al fitxer de logs (escrit per l'app, llegit per Alloy) | `logs/app.log` |
+| `PICARX_LOG_LEVEL` | Nivell de log: `DEBUG`, `INFO`, `WARNING`, `ERROR` | `INFO` |
+| `PICARX_LOG_CONSOLE` | `1` per habilitar sortida a consola | `1` |
+| `PICARX_LOG_FILE_ENABLED` | `1` per escriure logs a fitxer | `1` |
+| `PICARX_METRICS_ENABLED` | `1` per habilitar mètriques Prometheus | `0` |
+| `PICARX_METRICS_PORT` | Port de l'endpoint `/metrics` | `9090` |
+| `PICARX_LOG_PATH` | Ruta al fitxer de logs (per Alloy; ha de coincidir amb `PICARX_LOG_FILE`) | - |
+| `GCLOUD_RW_API_KEY` | API key de Grafana Cloud (per Alloy) | - |
+| `GCLOUD_HOSTED_METRICS_ID` | Instance ID de Prometheus a Grafana Cloud | - |
+| `GCLOUD_HOSTED_LOGS_ID` | Instance ID de Loki a Grafana Cloud | - |
+
+**Configuració a la Raspberry Pi:**
+
+1. Crea les variables d'entorn (per exemple a `~/.bashrc` o un fitxer `/etc/environment.d/picarx.conf`):
+   ```bash
+   export PICARX_LOG_FILE=/var/log/picarx/app.log
+   export PICARX_METRICS_ENABLED=1
+   export PICARX_LOG_PATH=/var/log/picarx/app.log
+   export GCLOUD_RW_API_KEY="la-teva-api-key"
+   export GCLOUD_HOSTED_METRICS_ID="el-teu-instance-id"
+   export GCLOUD_HOSTED_LOGS_ID="el-teu-instance-id"
+   ```
+
+2. Crea el directori de logs i dona permisos:
+   ```bash
+   sudo mkdir -p /var/log/picarx
+   sudo chown pi:pi /var/log/picarx
+   ```
+
+3. Afegeix els blocs de `config/alloy.picarx.example.alloy` a la configuració d'Alloy (`/etc/alloy/config.alloy`).
+
+4. Reinicia Alloy:
+   ```bash
+   sudo systemctl restart alloy.service
+   ```
+
 ### Permisos d'àudio a la Raspberry Pi
 
 A la Raspberry Pi, abans d'executar el projecte, cal afegir l'usuari als grups d'àudio i PulseAudio (substitueix `[Usuari]` pel teu nom d'usuari):
@@ -92,6 +134,9 @@ Opcions disponibles:
 
 - `gpt_car.py`: Fitxer principal que gestiona el robot i la integració amb OpenAI
 - `openai_helper.py`: Classe helper per interactuar amb l'API d'OpenAI
+- `logging_config.py`: Configuració de logging (consola i fitxer JSON per Loki)
+- `metrics.py`: Mètriques Prometheus per Grafana Alloy
+- `config/alloy.picarx.example.alloy`: Configuració d'exemple per Grafana Alloy
 - `preset_actions.py`: Accions predefinides del robot (moviments, gestos, sons)
 - `utils.py`: Funcions auxiliars (TTS,<> processament de so, etc.)
 - `visual_tracking.py`: Funcionalitat de seguiment visual

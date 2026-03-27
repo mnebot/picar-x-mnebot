@@ -1,8 +1,11 @@
-from time import sleep
+import logging
 import random
 from math import sin, cos, pi
+from time import sleep
 
 import visual_tracking
+
+logger = logging.getLogger(__name__)
 
 def wave_hands(car):
     car.reset()
@@ -488,7 +491,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        print(f'Error:\n {e}')
+        logger.error("Error: %s", e)
     finally:
         my_car.reset()
         sleep(.1)
